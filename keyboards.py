@@ -24,3 +24,12 @@ def build_interests_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
             )
     buttons.append([InlineKeyboardButton(text="Готово ✅", callback_data="interest_done")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def skip_photo_keyboard() -> InlineKeyboardMarkup:
+    """Keyboard shown when asking for an optional photo."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустить", callback_data="photo_skip")]
+        ]
+    )
