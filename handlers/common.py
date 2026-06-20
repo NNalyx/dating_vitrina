@@ -1,7 +1,6 @@
 # handlers/common.py
 
 from aiogram import Router, types
-from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
@@ -36,7 +35,6 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
     await message.answer(
         "Добро пожаловать! Для начала работы нужно пройти регистрацию.\n\n"
         + PRIVACY_POLICY_TEXT,
-        parse_mode=ParseMode.HTML,
         reply_markup=policy_keyboard(),
     )
     await state.set_state(Registration.policy)
