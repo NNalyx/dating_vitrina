@@ -66,7 +66,7 @@ async def toggle_interest(callback: types.CallbackQuery, state: FSMContext) -> N
     else:
         selected.add(item)
 
-    await state.update_data(interests=selected)
+    await state.update_data(interests=list(selected))
     await callback.message.edit_reply_markup(
         reply_markup=build_interests_keyboard(selected)
     )
