@@ -104,6 +104,10 @@ async def process_photo(message: types.Message, state: FSMContext) -> None:
 @router.callback_query(F.data == "photo_skip", Registration.photo)
 async def skip_photo(callback: types.CallbackQuery, state: FSMContext) -> None:
     """Skip the photo step with a warning, then finish registration."""
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+
     await callback.message.edit_text(
         "Фото не добавлено. Пользователи без фото обычно получают меньше лайков."
     )
@@ -111,19 +115,47 @@ async def skip_photo(callback: types.CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.message(Registration.photo)
+async def wrong_photo_input(message: types.Message) -> None:
+    """Handle any non-photo input during the photo step."""
+    await message.answer(
+        "Пожалуйста, отправь фотографию или нажми кнопку «Пропустить»."
+    )
+
+
 async def _save_profile(
     message: types.Message, state: FSMContext, photo_id: str | None
 ) -> None:
     """Persist the user and clear the registration state."""
+    if message.from_user is None:
+        await message.answer("Не удалось определить пользователя.")
+        return
+
     data = await state.get_data()
-    await add_user(
-        user_id=message.from_user.id,
-        username=message.from_user.username,
-        age=data["age"],
-        name=data["name"],
-        interests=sorted(data["interests"]),
-        photo_file_id=photo_id,
-    )
+    required_fields = ("age", "name", "interests")
+    missing = [field for field in required_fields if field not in data]
+    if missing:
+        await message.answer(
+            "Что-то пошло не так с регистрацией. Попробуй начать сначала с /start."
+        )
+        await state.clear()
+        return
+
+    try:
+        await add_user(
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            age=data["age"],
+            name=data["name"],
+            interests=sorted(data["interests"]),
+            photo_file_id=photo_id,
+        )
+    except Exception:
+        await message.answer(
+            "Не удалось сохранить анкету. Попробуй ещё раз позже."
+        )
+        return
+
     await message.answer(
         "🎉 Регистрация завершена! Теперь ты можешь использовать /search для поиска анкет."
     )
