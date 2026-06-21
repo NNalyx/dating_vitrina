@@ -5,7 +5,14 @@ from aiogram.fsm.context import FSMContext
 
 from config import MIN_AGE
 from database import add_user
-from keyboards import build_interests_keyboard, skip_photo_keyboard
+from handlers.menu import show_main_menu
+from keyboards import (
+    build_interests_keyboard,
+    gender_keyboard,
+    goal_keyboard,
+    looking_for_keyboard,
+    skip_photo_keyboard,
+)
 from states import Registration
 
 router = Router()
@@ -14,6 +21,9 @@ router = Router()
 @router.callback_query(F.data == "policy_agree", Registration.policy)
 async def process_policy(callback: types.CallbackQuery, state: FSMContext) -> None:
     """User agreed to the privacy policy."""
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
     await callback.message.edit_text("Отлично! Сколько тебе лет?")
     await state.set_state(Registration.age)
     await callback.answer()
@@ -40,7 +50,7 @@ async def process_age(message: types.Message, state: FSMContext) -> None:
 
 @router.message(Registration.name)
 async def process_name(message: types.Message, state: FSMContext) -> None:
-    """Save the user's display name and move to interest selection."""
+    """Save the user's display name and move to gender selection."""
     name = message.text.strip() if message.text else ""
     if len(name) < 2:
         await message.answer("Имя слишком короткое. Введи хотя бы 2 символа.")
@@ -48,10 +58,54 @@ async def process_name(message: types.Message, state: FSMContext) -> None:
 
     await state.update_data(name=name)
     await message.answer(
+        "Укажи свой пол:",
+        reply_markup=gender_keyboard(),
+    )
+    await state.set_state(Registration.gender)
+
+
+@router.callback_query(F.data.startswith("gender:"), Registration.gender)
+async def process_gender(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Save gender and ask who the user is looking for."""
+    gender = callback.data.split(":", 1)[1]
+    await state.update_data(gender=gender)
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+    await callback.message.edit_text("Кого ты ищешь?", reply_markup=looking_for_keyboard())
+    await state.set_state(Registration.looking_for)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("looking_for:"), Registration.looking_for)
+async def process_looking_for(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Save looking_for preference and ask for the dating goal."""
+    looking_for = callback.data.split(":", 1)[1]
+    await state.update_data(looking_for=looking_for)
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Что ты ищешь?", reply_markup=goal_keyboard()
+    )
+    await state.set_state(Registration.goal)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("goal:"), Registration.goal)
+async def process_goal(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Save goal and move to interest selection."""
+    goal = callback.data.split(":", 1)[1]
+    await state.update_data(goal=goal)
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+    await callback.message.edit_text(
         "Выбери свои увлечения. Нужно выбрать минимум 3. Нажми «Готово», когда закончишь.",
         reply_markup=build_interests_keyboard(set()),
     )
     await state.set_state(Registration.interests)
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("interest:"), Registration.interests)
@@ -67,6 +121,9 @@ async def toggle_interest(callback: types.CallbackQuery, state: FSMContext) -> N
         selected.add(item)
 
     await state.update_data(interests=list(selected))
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
     await callback.message.edit_reply_markup(
         reply_markup=build_interests_keyboard(selected)
     )
@@ -85,6 +142,9 @@ async def finish_interests(callback: types.CallbackQuery, state: FSMContext) -> 
         )
         return
 
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
     await callback.message.edit_text(
         "Отправь свою фотографию. Это повысит количество лайков. "
         "Если не хочешь — нажми «Пропустить».",
@@ -126,13 +186,13 @@ async def wrong_photo_input(message: types.Message) -> None:
 async def _save_profile(
     message: types.Message, state: FSMContext, photo_id: str | None
 ) -> None:
-    """Persist the user and clear the registration state."""
+    """Persist the user and show the main menu."""
     if message.from_user is None:
         await message.answer("Не удалось определить пользователя.")
         return
 
     data = await state.get_data()
-    required_fields = ("age", "name", "interests")
+    required_fields = ("age", "name", "gender", "looking_for", "goal", "interests")
     missing = [field for field in required_fields if field not in data]
     if missing:
         await message.answer(
@@ -147,6 +207,9 @@ async def _save_profile(
             username=message.from_user.username,
             age=data["age"],
             name=data["name"],
+            gender=data["gender"],
+            looking_for=data["looking_for"],
+            goal=data["goal"],
             interests=sorted(data["interests"]),
             photo_file_id=photo_id,
         )
@@ -156,7 +219,5 @@ async def _save_profile(
         )
         return
 
-    await message.answer(
-        "🎉 Регистрация завершена! Теперь ты можешь использовать /search для поиска анкет."
-    )
-    await state.clear()
+    await message.answer("🎉 Регистрация завершена!")
+    await show_main_menu(message, state)
