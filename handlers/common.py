@@ -5,6 +5,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from database import user_exists
+from handlers.menu import show_main_menu
 from keyboards import policy_keyboard
 from states import Registration
 
@@ -12,13 +13,14 @@ router = Router()
 
 PRIVACY_POLICY_TEXT = (
     "<b>Политика конфиденциальности</b>\n\n"
-    "<span class=\"tg-spoiler\">"
-    "Нажимая «Согласен», вы подтверждаете, что вам исполнилось 16 лет, "
-    "и соглашаетесь на обработку предоставленных данных (возраст, имя/ник, фото, увлечения) "
-    "в рамках работы бота. Администрация не несёт ответственности за действия пользователей "
-    "и содержание анкет. Мы не передаём персональные данные третьим лицам."
-    "</span>\n\n"
-    "Для продолжения регистрации нажмите кнопку ниже."
+    "<blockquote expandable>\n"
+    "1. Мы храним: возраст, имя, пол, цель знакомства, увлечения и фото.\n"
+    "2. Данные используются только для подбора анкет внутри бота.\n"
+    "3. Бот предназначен для пользователей 16+.\n"
+    "4. Мы не передаём данные третьим лицам.\n"
+    "5. Администрация не отвечает за поведение других пользователей.\n"
+    "</blockquote>\n\n"
+    "Для продолжения регистрации нажми кнопку ниже."
 )
 
 
@@ -26,10 +28,11 @@ PRIVACY_POLICY_TEXT = (
 async def cmd_start(message: types.Message, state: FSMContext) -> None:
     await state.clear()
 
+    if message.from_user is None:
+        return
+
     if await user_exists(message.from_user.id):
-        await message.answer(
-            "Привет снова! Ты уже зарегистрирован. Используй /search для поиска анкет."
-        )
+        await show_main_menu(message, state)
         return
 
     await message.answer(
