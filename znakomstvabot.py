@@ -9,13 +9,12 @@ from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import common, registration
+from handlers import browse, common, likes, menu, profile, registration
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
-    # Ensure SQLite database and tables exist (creates file if missing)
     await init_db()
 
     bot = Bot(
@@ -23,7 +22,14 @@ async def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher()
-    dp.include_routers(common.router, registration.router)
+    dp.include_routers(
+        common.router,
+        registration.router,
+        menu.router,
+        profile.router,
+        browse.router,
+        likes.router,
+    )
 
     await dp.start_polling(bot)
 
