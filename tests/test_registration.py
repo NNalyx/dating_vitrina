@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from handlers.registration import _save_profile
+from handlers.registration import _save_profile, process_city, process_name
+from states import Registration
 
 
 def _make_message(user_id: int, username: str | None, is_bot: bool):
@@ -60,3 +61,47 @@ def test_save_profile_uses_passed_user_id(monkeypatch):
     assert captured["age"] == 20
     assert captured["gender"] == "female"
     assert captured["city"] == "Москва"
+
+
+def test_process_name_rejects_profanity():
+    message = MagicMock()
+    message.text = "блядь"
+    message.answer = AsyncMock()
+
+    state = MagicMock()
+    state.update_data = AsyncMock()
+    state.set_state = AsyncMock()
+
+    asyncio.run(process_name(message, state))
+
+    state.update_data.assert_not_called()
+    message.answer.assert_awaited_once_with(
+        "⚠️ Имя содержит недопустимые слова. Введи другое имя."
+    )
+
+
+def test_process_city_rejects_profanity():
+    message = MagicMock()
+    message.text = "блядь"
+    message.answer = AsyncMock()
+
+    state = MagicMock()
+    state.get_data = AsyncMock(
+        return_value={
+            "age": 25,
+            "name": "Анна",
+            "gender": "female",
+            "looking_for": "male",
+            "goal": "relationship",
+            "interests": ["music", "sport", "travel"],
+        }
+    )
+    state.update_data = AsyncMock()
+    state.set_state = AsyncMock()
+
+    asyncio.run(process_city(message, state))
+
+    state.update_data.assert_not_called()
+    message.answer.assert_awaited_once_with(
+        "⚠️ Название города содержит недопустимые слова. Введи город ещё раз."
+    )

@@ -14,6 +14,7 @@ from keyboards import (
     skip_photo_keyboard,
 )
 from services.city_validation import is_valid_city, normalize_city
+from services.moderation import is_clean_city, is_clean_name
 from states import Registration
 
 router = Router()
@@ -60,6 +61,10 @@ async def process_name(message: types.Message, state: FSMContext) -> None:
     name = message.text.strip() if message.text else ""
     if len(name) < 2:
         await message.answer("Имя слишком короткое. Введи хотя бы 2 символа.")
+        return
+
+    if not is_clean_name(name):
+        await message.answer("⚠️ Имя содержит недопустимые слова. Введи другое имя.")
         return
 
     await state.update_data(name=name)
@@ -169,7 +174,14 @@ async def process_city(message: types.Message, state: FSMContext) -> None:
         )
         return
 
-    await state.update_data(city=normalize_city(raw))
+    normalized = normalize_city(raw)
+    if not is_clean_city(normalized):
+        await message.answer(
+            "⚠️ Название города содержит недопустимые слова. Введи город ещё раз."
+        )
+        return
+
+    await state.update_data(city=normalized)
     await message.answer(
         "Отправь свою фотографию. Это повысит количество лайков. "
         "Если не хочешь — нажми «Пропустить».",
