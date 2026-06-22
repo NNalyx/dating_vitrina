@@ -49,4 +49,9 @@ def format_browse_card(user: dict, compatibility: int) -> str:
         f"🎯 <b>Цель:</b> {_label(user['goal'])}",
         f"⭐ <b>Увлечения:</b> {interests_text}",
     ]
+
+    city = user.get("city")
+    if city:
+        lines.append(f"📍 <b>Город:</b> {city}")
+
     return "\n".join(lines)
