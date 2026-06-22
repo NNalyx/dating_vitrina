@@ -2,6 +2,7 @@
 
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import MAX_AGE, MIN_AGE
 from database import add_user
@@ -19,15 +20,31 @@ from states import Registration
 
 router = Router()
 
+MINI_APP_URL = "https://antpl.github.io/miniapp/"  # update after GitHub Pages deploy
+
 
 @router.callback_query(F.data == "policy_agree", Registration.policy)
 async def process_policy(callback: types.CallbackQuery, state: FSMContext) -> None:
-    """User agreed to the privacy policy."""
+    """User agreed to the privacy policy — offer the Mini App."""
     if callback.message is None:
         await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
         return
-    await callback.message.edit_text("Отлично! Сколько тебе лет?")
-    await state.set_state(Registration.age)
+
+    await state.clear()
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Открыть приложение",
+                    web_app=WebAppInfo(url=MINI_APP_URL),
+                )
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        "Отлично! Нажми кнопку ниже, чтобы продолжить в приложении.",
+        reply_markup=keyboard,
+    )
     await callback.answer()
 
 
