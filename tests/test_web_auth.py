@@ -47,3 +47,26 @@ class TestValidateInitData:
         init_data = f"auth_date=1690000000&hash={hash_value}"
         result = validate_init_data(init_data)
         assert result is None
+
+
+@pytest.fixture
+async def client(aiohttp_client):
+    from web_app import create_app
+
+    app = create_app()
+    return await aiohttp_client(app)
+
+
+async def test_auth_valid_init_data(client, monkeypatch):
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    init_data = _make_init_data(123456, "test_token_12345")
+    resp = await client.post("/api/auth", json={"initData": init_data})
+    assert resp.status == 200
+    data = await resp.json()
+    assert data["user_id"] == 123456
+    assert data["is_registered"] is False
+
+
+async def test_auth_invalid_init_data(client):
+    resp = await client.post("/api/auth", json={"initData": "bad"})
+    assert resp.status == 401
