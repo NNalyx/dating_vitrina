@@ -1,55 +1,58 @@
-import hmac
-import json
-import urllib.parse
-from hashlib import sha256
+from telegram_webapp_auth.auth import TelegramAuthenticator, generate_secret_key
+from telegram_webapp_auth.errors import InvalidInitDataError
 
 from config import BOT_TOKEN
 
 
-def _constant_time_compare(a: str, b: str) -> bool:
-    return hmac.compare_digest(a.encode(), b.encode())
+def _bot_id() -> int | None:
+    """Return the numeric bot ID from the bot token, or None if not parseable."""
+    try:
+        return int(BOT_TOKEN.split(":", 1)[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def _authenticator() -> TelegramAuthenticator:
+    """Return an authenticator configured with the current bot token."""
+    return TelegramAuthenticator(generate_secret_key(BOT_TOKEN))
+
+
+def _has_signature(init_data: str) -> bool:
+    """Return True if initData contains an Ed25519 signature field."""
+    for part in init_data.split("&"):
+        if part.startswith("signature="):
+            return True
+    return False
 
 
 def validate_init_data(init_data: str) -> int | None:
-    """Validate Telegram WebApp initData and return user_id or None.
+    """Validate Telegram WebApp initData and return the user_id or None.
 
-    Supports both the legacy ``hash`` field and the newer ``signature`` field.
+    Supports both legacy HMAC-SHA256 ``hash`` signatures (signed with the bot
+    token) and newer Ed25519 ``signature`` signatures (signed by Telegram).
     """
     if not init_data:
         return None
 
-    pairs = []
-    received_signature = None
-    for part in init_data.split("&"):
-        if "=" not in part:
-            continue
-        key, value = part.split("=", 1)
-        if key in ("hash", "signature"):
-            received_signature = value
-        else:
-            pairs.append((key, value))
+    authenticator = _authenticator()
 
-    if not received_signature:
-        return None
-
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(pairs))
-
-    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), sha256).digest()
-    expected_signature = hmac.new(secret_key, data_check_string.encode(), sha256).hexdigest()
-
-    if not _constant_time_compare(received_signature, expected_signature):
-        return None
-
-    user_value = None
-    for k, v in pairs:
-        if k == "user":
-            user_value = urllib.parse.unquote(v)
-            break
-    if not user_value:
-        return None
-
+    # Fast path: legacy HMAC-SHA256 hash signed with the bot token.
     try:
-        user = json.loads(user_value)
-        return int(user.get("id"))
-    except (json.JSONDecodeError, ValueError, TypeError):
-        return None
+        web_app_data = authenticator.validate(init_data)
+        if web_app_data.user is not None:
+            return int(web_app_data.user.id)
+    except InvalidInitDataError:
+        pass
+
+    # Fallback: Ed25519 signature signed by Telegram (no bot token required).
+    if _has_signature(init_data):
+        bot_id = _bot_id()
+        if bot_id is not None:
+            try:
+                web_app_data = authenticator.validate_third_party(init_data, bot_id)
+                if web_app_data.user is not None:
+                    return int(web_app_data.user.id)
+            except InvalidInitDataError:
+                pass
+
+    return None

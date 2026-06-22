@@ -6,7 +6,11 @@ from services.init_data import validate_init_data
 
 
 def _make_init_data(user_id: int, bot_token: str) -> str:
-    """Build a valid Telegram initData string for tests."""
+    """Build a valid Telegram initData string for tests.
+
+    Mirrors the parsing used by telegram-webapp-auth: values are URL-decoded
+    before building the data_check_string.
+    """
     from hmac import HMAC
     from hashlib import sha256
 
@@ -16,7 +20,9 @@ def _make_init_data(user_id: int, bot_token: str) -> str:
         ("query_id", "test_query_id"),
         ("user", user),
     ]
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(pairs))
+    data_check_string = "\n".join(
+        f"{k}={urllib.parse.unquote(v)}" for k, v in sorted(pairs)
+    )
     secret_key = HMAC(b"WebAppData", bot_token.encode(), sha256).digest()
     hash_value = HMAC(secret_key, data_check_string.encode(), sha256).hexdigest()
     pairs.append(("hash", hash_value))
