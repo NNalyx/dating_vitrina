@@ -98,8 +98,8 @@ export function renderRegistration(app, api, onComplete) {
                 if (id === "gender") profile.gender = btn.dataset.value;
                 if (id === "looking_for") profile.looking_for = btn.dataset.value;
                 if (id === "goal") profile.goal = btn.dataset.value;
-                container.querySelectorAll(".option").forEach(b => b.style.borderColor = "");
-                btn.style.borderColor = "var(--accent)";
+                container.querySelectorAll(".option").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected");
             });
         });
 
