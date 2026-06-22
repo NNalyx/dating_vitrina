@@ -24,7 +24,8 @@ async def cors_middleware(request: web.Request, handler):
     return resp
 
 
-def create_app() -> web.Application:
+def create_app(bot=None) -> web.Application:
     app = web.Application(middlewares=[cors_middleware])
+    app["bot"] = bot
     app.add_routes(routes)
     return app

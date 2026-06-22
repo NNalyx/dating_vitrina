@@ -44,7 +44,7 @@ async def main() -> None:
         settings.router,
     )
 
-    app = create_app()
+    app = create_app(bot)
 
     await asyncio.gather(
         start_bot(bot, dp),

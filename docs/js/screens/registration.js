@@ -48,7 +48,7 @@ export function renderRegistration(app, api, onComplete) {
     function render() {
         const current = STEPS[step];
         app.innerHTML = `
-            <div class="screen active" id="registration">
+            <div class="screen" id="registration">
                 <div class="step-counter">Шаг ${step + 1} из ${STEPS.length}</div>
                 <h2>${current.title}</h2>
                 <div id="step-content"></div>
@@ -58,6 +58,10 @@ export function renderRegistration(app, api, onComplete) {
             </div>
         `;
         renderStepContent(current.id);
+        requestAnimationFrame(() => {
+            const screen = document.getElementById("registration");
+            if (screen) screen.classList.add("active");
+        });
         document.getElementById("nextBtn").addEventListener("click", handleNext);
     }
 
@@ -68,28 +72,56 @@ export function renderRegistration(app, api, onComplete) {
         } else if (id === "name") {
             container.innerHTML = `<input type="text" id="input" placeholder="Имя" value="${profile.name}">`;
         } else if (id === "gender") {
-            container.innerHTML = GENDER_OPTIONS.map(o =>
-                `<button class="secondary option" data-value="${o.value}">${o.label}</button>`
-            ).join("<br><br>");
+            container.innerHTML = `<div class="options">${GENDER_OPTIONS.map((o, i) =>
+                `<button class="secondary option ${profile.gender === o.value ? "selected" : ""}" data-value="${o.value}" style="animation-delay: ${i * 50}ms">${o.label}</button>`
+            ).join("")}</div>`;
         } else if (id === "looking_for") {
-            container.innerHTML = LOOKING_OPTIONS.map(o =>
-                `<button class="secondary option" data-value="${o.value}">${o.label}</button>`
-            ).join("<br><br>");
+            container.innerHTML = `<div class="options">${LOOKING_OPTIONS.map((o, i) =>
+                `<button class="secondary option ${profile.looking_for === o.value ? "selected" : ""}" data-value="${o.value}" style="animation-delay: ${i * 50}ms">${o.label}</button>`
+            ).join("")}</div>`;
         } else if (id === "goal") {
-            container.innerHTML = GOAL_OPTIONS.map(o =>
-                `<button class="secondary option" data-value="${o.value}">${o.label}</button>`
-            ).join("<br><br>");
+            container.innerHTML = `<div class="options">${GOAL_OPTIONS.map((o, i) =>
+                `<button class="secondary option ${profile.goal === o.value ? "selected" : ""}" data-value="${o.value}" style="animation-delay: ${i * 50}ms">${o.label}</button>`
+            ).join("")}</div>`;
         } else if (id === "interests") {
-            container.innerHTML = `<div class="chips">${INTERESTS.map(i =>
-                `<span class="chip ${profile.interests.has(i) ? "selected" : ""}" data-value="${i}">${i}</span>`
+            container.innerHTML = `<div class="chips">${INTERESTS.map((i, idx) =>
+                `<span class="chip ${profile.interests.has(i) ? "selected" : ""}" data-value="${i}" style="animation-delay: ${idx * 30}ms">${i}</span>`
             ).join("")}</div>`;
         } else if (id === "city") {
             container.innerHTML = `<input type="text" id="input" placeholder="Город" value="${profile.city}">`;
         } else if (id === "photo") {
             container.innerHTML = `
                 <p>Фото повышает количество лайков. Пока можешь пропустить.</p>
+                <img id="photoPreview" class="photo-preview" src="" alt="" style="display:none;">
+                <input type="file" id="photoInput" class="photo-input" accept="image/*">
+                <button class="secondary" id="choosePhoto">Выбрать фото</button>
                 <button class="secondary" id="skipPhoto">Пропустить</button>
             `;
+
+            const photoInput = document.getElementById("photoInput");
+            const photoPreview = document.getElementById("photoPreview");
+            const choosePhoto = document.getElementById("choosePhoto");
+
+            choosePhoto.addEventListener("click", () => photoInput.click());
+
+            photoInput.addEventListener("change", async () => {
+                const file = photoInput.files[0];
+                if (!file) return;
+                photoPreview.src = URL.createObjectURL(file);
+                photoPreview.style.display = "block";
+                choosePhoto.textContent = "Загрузка...";
+                choosePhoto.disabled = true;
+                try {
+                    const data = await api.uploadPhoto(file);
+                    profile.photo_file_id = data.file_id;
+                    choosePhoto.textContent = "Фото загружено";
+                } catch (e) {
+                    document.getElementById("error").textContent = e.message;
+                    choosePhoto.textContent = "Выбрать фото";
+                    choosePhoto.disabled = false;
+                }
+            });
+
             document.getElementById("skipPhoto").addEventListener("click", () => submit());
         }
 
