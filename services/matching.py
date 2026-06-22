@@ -3,7 +3,9 @@
 INTEREST_WEIGHT = 40
 AGE_WEIGHT = 30
 GOAL_WEIGHT = 30
+GOAL_MISMATCH_WEIGHT = 10
 AGE_DIFF_MAX = 10
+CITY_BONUS = 10
 
 
 def _parse_interests(interests: str | None) -> set[str]:
@@ -36,13 +38,25 @@ def calculate_compatibility(me: dict, candidate: dict) -> int:
     age_diff = abs(me["age"] - candidate["age"])
     age_score = max(0, 1 - age_diff / AGE_DIFF_MAX) * AGE_WEIGHT
 
-    goal_score = GOAL_WEIGHT if me["goal"] == candidate["goal"] else 0
+    goal_score = GOAL_WEIGHT if me["goal"] == candidate["goal"] else GOAL_MISMATCH_WEIGHT
 
-    return round(interest_score + age_score + goal_score)
+    score = round(interest_score + age_score + goal_score)
+
+    my_city = me.get("city")
+    their_city = candidate.get("city")
+    if my_city and their_city and my_city.lower() == their_city.lower():
+        score = min(100, score + CITY_BONUS)
+
+    return score
 
 
 def filter_candidates(me: dict, candidates: list[dict], viewed_ids: set[int]) -> list[dict]:
     """Return candidates matching filters, excluding self and already viewed."""
+    min_age = me.get("filter_min_age", 16)
+    max_age = me.get("filter_max_age", 100)
+    only_my_city = bool(me.get("filter_only_my_city", 0))
+    my_city = me.get("city")
+
     results = []
     for candidate in candidates:
         cid = candidate["user_id"]
@@ -55,10 +69,9 @@ def filter_candidates(me: dict, candidates: list[dict], viewed_ids: set[int]) ->
             candidate["looking_for"],
         ):
             continue
-        if me["goal"] != candidate["goal"]:
+        if candidate["age"] < min_age or candidate["age"] > max_age:
             continue
-        age_diff = abs(me["age"] - candidate["age"])
-        if age_diff > 5:
+        if only_my_city and my_city and candidate.get("city", "").lower() != my_city.lower():
             continue
         results.append(candidate)
     return results

@@ -3,7 +3,7 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 
-from config import MIN_AGE
+from config import MAX_AGE, MIN_AGE
 from database import add_user
 from handlers.menu import show_main_menu
 from keyboards import (
@@ -13,6 +13,7 @@ from keyboards import (
     looking_for_keyboard,
     skip_photo_keyboard,
 )
+from services.city_validation import is_valid_city, normalize_city
 from states import Registration
 
 router = Router()
@@ -40,6 +41,11 @@ async def process_age(message: types.Message, state: FSMContext) -> None:
     if age < MIN_AGE:
         await message.answer(
             f"Извини, но этот бот только для пользователей {MIN_AGE}+ лет."
+        )
+        return
+    if age > MAX_AGE:
+        await message.answer(
+            f"Возраст не может быть больше {MAX_AGE} лет. Проверь, пожалуйста, ввод."
         )
         return
 
@@ -146,32 +152,62 @@ async def finish_interests(callback: types.CallbackQuery, state: FSMContext) -> 
         await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
         return
     await callback.message.edit_text(
+        "🏙️ Введи свой город (Россия):"
+    )
+    await state.set_state(Registration.city)
+    await callback.answer()
+
+
+@router.message(Registration.city)
+async def process_city(message: types.Message, state: FSMContext) -> None:
+    """Validate city and move to the photo step."""
+    raw = message.text.strip() if message.text else ""
+    if not is_valid_city(raw):
+        await message.answer(
+            "⚠️ Название города не похоже на настоящее. "
+            "Введи город ещё раз (только буквы)."
+        )
+        return
+
+    await state.update_data(city=normalize_city(raw))
+    await message.answer(
         "Отправь свою фотографию. Это повысит количество лайков. "
         "Если не хочешь — нажми «Пропустить».",
         reply_markup=skip_photo_keyboard(),
     )
     await state.set_state(Registration.photo)
-    await callback.answer()
 
 
 @router.message(Registration.photo, F.photo)
 async def process_photo(message: types.Message, state: FSMContext) -> None:
     """Save the largest photo variant and finish registration."""
     photo_id = message.photo[-1].file_id
-    await _save_profile(message, state, photo_id)
+    await _save_profile(
+        message,
+        state,
+        user_id=message.from_user.id,
+        username=message.from_user.username,
+        photo_id=photo_id,
+    )
 
 
 @router.callback_query(F.data == "photo_skip", Registration.photo)
 async def skip_photo(callback: types.CallbackQuery, state: FSMContext) -> None:
     """Skip the photo step with a warning, then finish registration."""
-    if callback.message is None:
+    if callback.message is None or callback.from_user is None:
         await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
         return
 
     await callback.message.edit_text(
         "Фото не добавлено. Пользователи без фото обычно получают меньше лайков."
     )
-    await _save_profile(callback.message, state, photo_id=None)
+    await _save_profile(
+        callback.message,
+        state,
+        user_id=callback.from_user.id,
+        username=callback.from_user.username,
+        photo_id=None,
+    )
     await callback.answer()
 
 
@@ -184,15 +220,15 @@ async def wrong_photo_input(message: types.Message) -> None:
 
 
 async def _save_profile(
-    message: types.Message, state: FSMContext, photo_id: str | None
+    message: types.Message,
+    state: FSMContext,
+    user_id: int,
+    username: str | None,
+    photo_id: str | None,
 ) -> None:
     """Persist the user and show the main menu."""
-    if message.from_user is None:
-        await message.answer("Не удалось определить пользователя.")
-        return
-
     data = await state.get_data()
-    required_fields = ("age", "name", "gender", "looking_for", "goal", "interests")
+    required_fields = ("age", "name", "gender", "looking_for", "goal", "interests", "city")
     missing = [field for field in required_fields if field not in data]
     if missing:
         await message.answer(
@@ -203,8 +239,8 @@ async def _save_profile(
 
     try:
         await add_user(
-            user_id=message.from_user.id,
-            username=message.from_user.username,
+            user_id=user_id,
+            username=username,
             age=data["age"],
             name=data["name"],
             gender=data["gender"],
@@ -212,6 +248,7 @@ async def _save_profile(
             goal=data["goal"],
             interests=sorted(data["interests"]),
             photo_file_id=photo_id,
+            city=data["city"],
         )
     except Exception:
         await message.answer(

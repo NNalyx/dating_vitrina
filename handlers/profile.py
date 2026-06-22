@@ -3,7 +3,7 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 
-from config import MIN_AGE
+from config import MAX_AGE, MIN_AGE
 from database import get_user, update_user
 from handlers.menu import show_main_menu
 from keyboards import (
@@ -21,11 +21,25 @@ router = Router()
 @router.message(F.text == "📋 Моя анкета")
 async def show_my_profile(message: types.Message, state: FSMContext) -> None:
     """Show the user's own profile with edit options."""
-    await state.clear()
-    if message.from_user is None:
-        return
+    await _present_profile(message, state)
 
-    user = await get_user(message.from_user.id)
+
+@router.callback_query(F.data == "menu:profile")
+async def callback_show_profile(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Open the user's profile from the inline main menu."""
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+    await callback.message.delete()
+    await _present_profile(callback.message, state)
+    await callback.answer()
+
+
+async def _present_profile(message: types.Message, state: FSMContext) -> None:
+    """Fetch and display the user's profile card."""
+    await state.clear()
+
+    user = await get_user(message.chat.id)
     if user is None:
         await message.answer("Анкета не найдена. Начни регистрацию с /start.")
         return
@@ -92,10 +106,11 @@ async def edit_age(message: types.Message, state: FSMContext) -> None:
     if age < MIN_AGE:
         await message.answer(f"Минимальный возраст — {MIN_AGE} лет.")
         return
-
-    if message.from_user is None:
+    if age > MAX_AGE:
+        await message.answer(f"Максимальный возраст — {MAX_AGE} лет.")
         return
-    await update_user(message.from_user.id, age=age)
+
+    await update_user(message.chat.id, age=age)
     await message.answer("Возраст обновлён.")
     await show_main_menu(message, state)
 
@@ -108,9 +123,7 @@ async def edit_name(message: types.Message, state: FSMContext) -> None:
         await message.answer("Имя слишком короткое.")
         return
 
-    if message.from_user is None:
-        return
-    await update_user(message.from_user.id, name=name)
+    await update_user(message.chat.id, name=name)
     await message.answer("Имя обновлено.")
     await show_main_menu(message, state)
 
@@ -181,10 +194,8 @@ async def edit_finish_interests(callback: types.CallbackQuery, state: FSMContext
 @router.message(EditProfile.photo, F.photo)
 async def edit_photo(message: types.Message, state: FSMContext) -> None:
     """Save new photo."""
-    if message.from_user is None:
-        return
     photo_id = message.photo[-1].file_id
-    await update_user(message.from_user.id, photo_file_id=photo_id)
+    await update_user(message.chat.id, photo_file_id=photo_id)
     await message.answer("Фото обновлено.")
     await show_main_menu(message, state)
 

@@ -9,7 +9,7 @@ from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import browse, common, likes, menu, profile, registration
+from handlers import browse, common, likes, menu, profile, registration, settings
 
 
 async def main() -> None:
@@ -29,6 +29,7 @@ async def main() -> None:
         profile.router,
         browse.router,
         likes.router,
+        settings.router,
     )
 
     await dp.start_polling(bot)

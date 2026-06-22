@@ -15,11 +15,26 @@ router = Router()
 @router.message(F.text == "❤️ Мои лайки")
 async def show_likes(message: types.Message, state: FSMContext) -> None:
     """Show the most recent incoming like."""
-    await state.clear()
-    if message.from_user is None:
-        return
+    await _present_likes(message, state)
 
-    user = await get_user(message.from_user.id)
+
+@router.callback_query(F.data == "menu:likes")
+async def callback_show_likes(callback: types.CallbackQuery, state: FSMContext) -> None:
+    """Open the likes screen from the inline main menu."""
+    if callback.message is None:
+        await callback.answer("Ошибка: сообщение недоступно.", show_alert=True)
+        return
+    await callback.message.delete()
+    await _present_likes(callback.message, state)
+    await callback.answer()
+
+
+async def _present_likes(message: types.Message, state: FSMContext) -> None:
+    """Fetch and display the most recent unreciprocated incoming like."""
+    await state.clear()
+
+    user_id = message.chat.id
+    user = await get_user(user_id)
     if user is None:
         await message.answer("Сначала пройди регистрацию: /start")
         return
@@ -27,10 +42,10 @@ async def show_likes(message: types.Message, state: FSMContext) -> None:
     liker_id = None
     for candidate in await get_all_users():
         cid = candidate["user_id"]
-        if cid == message.from_user.id:
+        if cid == user_id:
             continue
-        if await has_like(cid, message.from_user.id):
-            if not await has_like(message.from_user.id, cid):
+        if await has_like(cid, user_id):
+            if not await has_like(user_id, cid):
                 liker_id = cid
                 break
 

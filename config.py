@@ -3,6 +3,7 @@
 BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Do not change the real token
 DB_PATH = "dating_bot.db"
 MIN_AGE = 16
+MAX_AGE = 100
 
 GENDER_OPTIONS = [
     ("male", "Парень"),

@@ -1,6 +1,6 @@
 # handlers/common.py
 
-from aiogram import Router, types
+from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
@@ -10,6 +10,12 @@ from keyboards import policy_keyboard
 from states import Registration
 
 router = Router()
+
+
+@router.callback_query(F.data == "noop")
+async def noop_callback(callback: types.CallbackQuery) -> None:
+    """Ignore taps on non-interactive category header buttons."""
+    await callback.answer()
 
 PRIVACY_POLICY_TEXT = (
     "<b>Политика конфиденциальности</b>\n\n"

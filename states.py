@@ -11,6 +11,7 @@ class Registration(StatesGroup):
     looking_for = State()
     goal = State()
     interests = State()
+    city = State()
     photo = State()
 
 
