@@ -20,7 +20,7 @@ from states import Registration
 
 router = Router()
 
-MINI_APP_URL = "https://antpl.github.io/miniapp/"  # update after GitHub Pages deploy
+MINI_APP_URL = "https://nnalyx.github.io/dating_vitrina/"
 
 
 @router.callback_query(F.data == "policy_agree", Registration.policy)

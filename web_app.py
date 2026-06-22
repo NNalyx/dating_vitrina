@@ -4,7 +4,7 @@ from web_routes import routes
 
 
 ALLOWED_ORIGINS = {
-    "https://antpl.github.io",  # update to your GitHub Pages domain
+    "https://nnalyx.github.io",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 }
