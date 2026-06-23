@@ -56,7 +56,12 @@ class TestValidateInitData:
 
 
 @pytest.fixture
-async def client(aiohttp_client):
+async def client(aiohttp_client, tmp_path, monkeypatch):
+    monkeypatch.setattr("config.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("database.DB_PATH", str(tmp_path / "test.db"))
+    from database import init_db
+
+    await init_db()
     from web_app import create_app
 
     app = create_app()
