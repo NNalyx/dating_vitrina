@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "./config.js";
 
 const initData = window.Telegram?.WebApp?.initData || "";
+const BASE_URL = API_BASE_URL || window.location.origin || "";
 
 async function request(method, path, body = null) {
     const options = {
@@ -13,7 +14,7 @@ async function request(method, path, body = null) {
     if (body) {
         options.body = JSON.stringify(body);
     }
-    const resp = await fetch(`${API_BASE_URL}${path}`, options);
+    const resp = await fetch(`${BASE_URL}${path}`, options);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
         throw new Error(data.error || `HTTP ${resp.status}`);
@@ -22,7 +23,7 @@ async function request(method, path, body = null) {
 }
 
 async function uploadRequest(path, formData) {
-    const resp = await fetch(`${API_BASE_URL}${path}`, {
+    const resp = await fetch(`${BASE_URL}${path}`, {
         method: "POST",
         headers: {
             "X-Init-Data": initData,

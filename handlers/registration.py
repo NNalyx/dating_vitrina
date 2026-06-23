@@ -17,10 +17,9 @@ from keyboards import (
 from services.city_validation import is_valid_city, normalize_city
 from services.moderation import is_clean_city, is_clean_name
 from states import Registration
+from tunnel import get_tunnel_url
 
 router = Router()
-
-MINI_APP_URL = "https://nnalyx.github.io/dating_vitrina/"
 
 
 @router.callback_query(F.data == "policy_agree", Registration.policy)
@@ -31,12 +30,20 @@ async def process_policy(callback: types.CallbackQuery, state: FSMContext) -> No
         return
 
     await state.clear()
+    mini_app_url = get_tunnel_url()
+    if mini_app_url is None:
+        await callback.answer(
+            "Приложение ещё запускается. Попробуй через несколько секунд.",
+            show_alert=True,
+        )
+        return
+
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="🚀 Открыть приложение",
-                    web_app=WebAppInfo(url=MINI_APP_URL),
+                    web_app=WebAppInfo(url=mini_app_url),
                 )
             ]
         ]

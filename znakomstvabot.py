@@ -9,6 +9,7 @@ from aiohttp import web
 from config import BOT_TOKEN
 from database import init_db
 from handlers import browse, common, likes, menu, profile, registration, settings
+from tunnel import start_tunnel, stop_tunnel
 from web_app import create_app
 
 
@@ -29,6 +30,9 @@ async def main() -> None:
 
     await init_db()
 
+    public_url = await start_tunnel()
+    logging.info("Public Mini App URL: %s", public_url)
+
     bot = Bot(
         token=BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
@@ -45,11 +49,16 @@ async def main() -> None:
     )
 
     app = create_app(bot)
+    app["public_url"] = public_url
 
-    await asyncio.gather(
-        start_bot(bot, dp),
-        start_web(app),
-    )
+    try:
+        await asyncio.gather(
+            start_bot(bot, dp),
+            start_web(app),
+        )
+    finally:
+        await stop_tunnel()
+        await bot.session.close()
 
 
 if __name__ == "__main__":
