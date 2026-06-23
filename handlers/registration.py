@@ -6,7 +6,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from config import MAX_AGE, MIN_AGE
 from database import add_user
-from handlers.menu import show_main_menu
 from keyboards import (
     build_interests_keyboard,
     gender_keyboard,

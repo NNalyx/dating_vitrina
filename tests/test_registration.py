@@ -27,7 +27,7 @@ def test_save_profile_uses_passed_user_id(monkeypatch):
         captured.update(kwargs)
 
     monkeypatch.setattr("handlers.registration.add_user", fake_add_user)
-    monkeypatch.setattr("handlers.registration.show_main_menu", AsyncMock())
+    monkeypatch.setattr("handlers.registration.get_tunnel_url", lambda: "https://example.com")
 
     state = MagicMock()
     state.get_data = AsyncMock(

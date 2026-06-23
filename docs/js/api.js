@@ -41,6 +41,7 @@ export const api = {
     auth: () => request("POST", "/api/auth", { initData }),
     register: (profile) => request("POST", "/api/register", { initData, ...profile }),
     validateCity: (city) => request("POST", "/api/validate-city", { city }),
+    getInterests: () => request("GET", "/api/interests"),
     me: () => request("GET", "/api/me"),
     updateMe: (data) => request("PUT", "/api/me", data),
     uploadPhoto: (file) => {

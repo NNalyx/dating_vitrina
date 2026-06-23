@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock
 
 from tests.test_web_auth import _make_init_data
 
@@ -14,6 +15,21 @@ async def client(aiohttp_client, tmp_path, monkeypatch):
 
     app = create_app()
     return await aiohttp_client(app)
+
+
+@pytest.fixture
+async def client_with_bot(aiohttp_client, tmp_path, monkeypatch):
+    monkeypatch.setattr("config.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("database.DB_PATH", str(tmp_path / "test.db"))
+    from database import init_db
+
+    await init_db()
+    from web_app import create_app
+    from aiogram import Bot
+
+    bot = AsyncMock(spec=Bot)
+    app = create_app(bot)
+    return await aiohttp_client(app), bot
 
 
 async def _register(client, monkeypatch, user_id, payload):
@@ -251,3 +267,82 @@ async def test_settings_get_and_update(client, monkeypatch):
     assert settings2["max_age"] == 30
     assert settings2["only_my_city"] is True
     assert settings2["notifications_enabled"] is False
+
+
+async def test_get_interests(client, monkeypatch):
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    headers = await _header(123)
+    resp = await client.get("/api/interests", headers=headers)
+    assert resp.status == 200
+    data = await resp.json()
+    assert len(data) > 0
+    assert all("key" in cat and "label" in cat and "items" in cat for cat in data)
+    game_category = next((cat for cat in data if cat["key"] == "games"), None)
+    assert game_category is not None
+    assert "Valorant" in game_category["items"]
+    assert "CS2" in game_category["items"]
+
+
+async def test_register_sends_welcome_message(client_with_bot, monkeypatch):
+    client, bot = client_with_bot
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    monkeypatch.setattr("tunnel.get_tunnel_url", lambda: "https://example.com")
+    await _register(
+        client,
+        monkeypatch,
+        1,
+        {
+            "age": 25,
+            "name": "Анна",
+            "gender": "female",
+            "looking_for": "male",
+            "goal": "relationship",
+            "interests": ["Музыка", "Спорт", "Кино"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    bot.send_message.assert_awaited_once()
+    call_args = bot.send_message.await_args
+    assert "Регистрация успешно пройдена" in call_args.kwargs["text"]
+
+
+async def test_mutual_like_sends_match_notification(client_with_bot, monkeypatch):
+    client, bot = client_with_bot
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    await _register(
+        client,
+        monkeypatch,
+        1,
+        {
+            "age": 25,
+            "name": "Анна",
+            "gender": "female",
+            "looking_for": "male",
+            "goal": "relationship",
+            "interests": ["Музыка", "Спорт", "Кино"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    await _register(
+        client,
+        monkeypatch,
+        2,
+        {
+            "age": 26,
+            "name": "Пётр",
+            "gender": "male",
+            "looking_for": "female",
+            "goal": "relationship",
+            "interests": ["Музыка", "Кино", "Игры"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    await client.post("/api/feed/2/like", headers=await _header(1))
+    back_resp = await client.post("/api/likes/1/like_back", headers=await _header(2))
+    assert back_resp.status == 200
+    assert bot.send_message.await_count >= 2
+    texts = [call.kwargs.get("text", "") for call in bot.send_message.await_args_list]
+    assert any("Взаимный лайк" in text for text in texts)

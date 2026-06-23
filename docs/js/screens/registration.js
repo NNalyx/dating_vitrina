@@ -1,3 +1,5 @@
+import { renderInterestPicker } from "../components/interestPicker.js";
+
 const GENDER_OPTIONS = [
     { value: "male", label: "Парень" },
     { value: "female", label: "Девушка" },
@@ -14,11 +16,6 @@ const GOAL_OPTIONS = [
     { value: "relationship", label: "Отношения" },
     { value: "friendship", label: "Дружба" },
     { value: "flirt", label: "Флирт" },
-];
-
-const INTERESTS = [
-    "Музыка", "Спорт", "Кино", "Игры", "Путешествия",
-    "Книги", "Технологии", "Фото", "Рисование", "Кулинария",
 ];
 
 const STEPS = [
@@ -44,6 +41,7 @@ export function renderRegistration(app, api, onComplete) {
         city: "",
         photo_file_id: null,
     };
+    let interestPicker = null;
 
     function render() {
         const current = STEPS[step];
@@ -57,15 +55,16 @@ export function renderRegistration(app, api, onComplete) {
                 <button id="nextBtn">Далее</button>
             </div>
         `;
-        renderStepContent(current.id);
-        requestAnimationFrame(() => {
-            const screen = document.getElementById("registration");
-            if (screen) screen.classList.add("active");
+        renderStepContent(current.id).then(() => {
+            requestAnimationFrame(() => {
+                const screen = document.getElementById("registration");
+                if (screen) screen.classList.add("active");
+            });
         });
         document.getElementById("nextBtn").addEventListener("click", handleNext);
     }
 
-    function renderStepContent(id) {
+    async function renderStepContent(id) {
         const container = document.getElementById("step-content");
         if (id === "age") {
             container.innerHTML = `<input type="number" id="input" placeholder="Возраст" value="${profile.age}">`;
@@ -84,9 +83,11 @@ export function renderRegistration(app, api, onComplete) {
                 `<button class="secondary option ${profile.goal === o.value ? "selected" : ""}" data-value="${o.value}" style="animation-delay: ${i * 50}ms">${o.label}</button>`
             ).join("")}</div>`;
         } else if (id === "interests") {
-            container.innerHTML = `<div class="chips">${INTERESTS.map((i, idx) =>
-                `<span class="chip ${profile.interests.has(i) ? "selected" : ""}" data-value="${i}" style="animation-delay: ${idx * 30}ms">${i}</span>`
-            ).join("")}</div>`;
+            const errorEl = document.getElementById("error");
+            interestPicker = await renderInterestPicker(container, api, profile.interests, {
+                minCount: 3,
+                errorEl,
+            });
         } else if (id === "city") {
             container.innerHTML = `<input type="text" id="input" placeholder="Город" value="${profile.city}">`;
             const input = document.getElementById("input");
@@ -162,19 +163,6 @@ export function renderRegistration(app, api, onComplete) {
                 btn.classList.add("selected");
             });
         });
-
-        container.querySelectorAll(".chip").forEach(chip => {
-            chip.addEventListener("click", () => {
-                const value = chip.dataset.value;
-                if (profile.interests.has(value)) {
-                    profile.interests.delete(value);
-                    chip.classList.remove("selected");
-                } else {
-                    profile.interests.add(value);
-                    chip.classList.add("selected");
-                }
-            });
-        });
     }
 
     function validate() {
@@ -194,7 +182,12 @@ export function renderRegistration(app, api, onComplete) {
         } else if (current.id === "goal") {
             if (!profile.goal) return "Выбери цель";
         } else if (current.id === "interests") {
-            if (profile.interests.size < 3) return "Выбери минимум 3 интереса";
+            if (interestPicker) {
+                const err = interestPicker.validate();
+                if (err) return err;
+            } else if (profile.interests.size < 3) {
+                return "Выбери минимум 3 интереса";
+            }
         } else if (current.id === "city") {
             if (!profile.city) return "Введи и подожди проверку города";
         }

@@ -5,7 +5,6 @@ from aiogram.fsm.context import FSMContext
 
 from config import MAX_AGE, MIN_AGE
 from database import get_user, update_user
-from handlers.menu import show_main_menu
 from keyboards import (
     build_interests_keyboard,
     goal_keyboard,
@@ -13,6 +12,7 @@ from keyboards import (
     profile_edit_keyboard,
 )
 from services.profile import format_profile
+from services.ui import send_mini_app_button
 from states import EditProfile
 
 router = Router()
@@ -112,7 +112,7 @@ async def edit_age(message: types.Message, state: FSMContext) -> None:
 
     await update_user(message.chat.id, age=age)
     await message.answer("Возраст обновлён.")
-    await show_main_menu(message, state)
+    await send_mini_app_button(message, "Готово!", state=state)
 
 
 @router.message(EditProfile.name)
@@ -125,7 +125,7 @@ async def edit_name(message: types.Message, state: FSMContext) -> None:
 
     await update_user(message.chat.id, name=name)
     await message.answer("Имя обновлено.")
-    await show_main_menu(message, state)
+    await send_mini_app_button(message, "Готово!", state=state)
 
 
 @router.callback_query(F.data.startswith("looking_for:"), EditProfile.looking_for)
@@ -137,7 +137,7 @@ async def edit_looking_for(callback: types.CallbackQuery, state: FSMContext) -> 
     value = callback.data.split(":", 1)[1]
     await update_user(callback.from_user.id, looking_for=value)
     await callback.answer("Кого ищешь — обновлено.")
-    await show_main_menu(callback.message, state)
+    await send_mini_app_button(callback.message, "Готово!", state=state)
 
 
 @router.callback_query(F.data.startswith("goal:"), EditProfile.goal)
@@ -149,7 +149,7 @@ async def edit_goal(callback: types.CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":", 1)[1]
     await update_user(callback.from_user.id, goal=value)
     await callback.answer("Цель обновлена.")
-    await show_main_menu(callback.message, state)
+    await send_mini_app_button(callback.message, "Готово!", state=state)
 
 
 @router.callback_query(F.data.startswith("interest:"), EditProfile.interests)
@@ -188,7 +188,7 @@ async def edit_finish_interests(callback: types.CallbackQuery, state: FSMContext
         return
     await update_user(callback.from_user.id, interests=selected)
     await callback.answer("Интересы обновлены.")
-    await show_main_menu(callback.message, state)
+    await send_mini_app_button(callback.message, "Готово!", state=state)
 
 
 @router.message(EditProfile.photo, F.photo)
@@ -197,7 +197,7 @@ async def edit_photo(message: types.Message, state: FSMContext) -> None:
     photo_id = message.photo[-1].file_id
     await update_user(message.chat.id, photo_file_id=photo_id)
     await message.answer("Фото обновлено.")
-    await show_main_menu(message, state)
+    await send_mini_app_button(message, "Готово!", state=state)
 
 
 @router.message(EditProfile.photo)

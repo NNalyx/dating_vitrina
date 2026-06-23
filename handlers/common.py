@@ -5,8 +5,8 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from database import user_exists
-from handlers.menu import show_main_menu
 from keyboards import policy_keyboard
+from services.ui import send_mini_app_button
 from states import Registration
 
 router = Router()
@@ -38,7 +38,11 @@ async def cmd_start(message: types.Message, state: FSMContext) -> None:
         return
 
     if await user_exists(message.from_user.id):
-        await show_main_menu(message, state)
+        await send_mini_app_button(
+            message,
+            "Регистрация успешно пройдена! Заходи в приложение",
+            state=state,
+        )
         return
 
     await message.answer(

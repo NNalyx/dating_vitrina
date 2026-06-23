@@ -5,9 +5,9 @@ from aiogram.fsm.context import FSMContext
 
 from database import add_like, get_all_users, get_user, has_like
 from handlers.browse import _notify_mutual_match
-from handlers.menu import show_main_menu
 from keyboards import like_response_keyboard
 from services.profile import format_profile
+from services.ui import send_mini_app_button
 
 router = Router()
 
@@ -90,7 +90,11 @@ async def like_back(callback: types.CallbackQuery, state: FSMContext) -> None:
         liked_id=liker_id,
     )
     await callback.message.delete()
-    await show_main_menu(callback.message, state)
+    await send_mini_app_button(
+        callback.message,
+        "Отлично! Продолжай знакомиться в приложении.",
+        state=state,
+    )
 
 
 @router.callback_query(F.data.startswith("like_skip:"))
@@ -101,5 +105,9 @@ async def like_skip(callback: types.CallbackQuery, state: FSMContext) -> None:
         return
 
     await callback.message.delete()
-    await show_main_menu(callback.message, state)
+    await send_mini_app_button(
+        callback.message,
+        "Пропущено. Заходи в приложение, чтобы найти кого-то ещё.",
+        state=state,
+    )
     await callback.answer()

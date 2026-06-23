@@ -13,10 +13,10 @@ from database import (
     get_viewed_ids,
     has_like,
 )
-from handlers.menu import show_main_menu
 from keyboards import browse_keyboard, like_response_keyboard
 from services.matching import filter_candidates, score_candidates
 from services.profile import format_browse_card, format_profile
+from services.ui import send_mini_app_button
 
 router = Router()
 
@@ -35,11 +35,11 @@ async def _show_next_profile(message: types.Message, state: FSMContext) -> None:
     scored = score_candidates(user, filtered)
 
     if not scored:
-        await message.answer(
+        await send_mini_app_button(
+            message,
             "Пока нет подходящих анкет. Попробуй позже.",
-            reply_markup=browse_keyboard(),
+            state=state,
         )
-        await state.clear()
         return
 
     candidate, compatibility = scored[0]
@@ -161,15 +161,15 @@ async def _notify_mutual_match(
     )
 
 
-def _contact_markup(user: dict) -> types.InlineKeyboardMarkup:
-    """Return a keyboard with a write button and a menu button."""
+def _contact_markup(user: dict) -> types.InlineKeyboardMarkup | None:
+    """Return a keyboard with a write button, or None if no usable contact link."""
     username = user.get("username")
-    user_id = user["user_id"]
-    url = f"https://t.me/{username}" if username else f"tg://user?id={user_id}"
+    if not username:
+        return None
+    url = f"https://t.me/{username}"
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text="💬 Написать", url=url)],
-            [types.InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
@@ -177,37 +177,33 @@ def _contact_markup(user: dict) -> types.InlineKeyboardMarkup:
 async def _send_match_notification(
     bot, chat_id: int, text: str, contact_user: dict
 ) -> None:
-    """Send a match notification. If Telegram rejects the contact button
-    because of the *other* user's privacy settings, explain that to the recipient.
-    """
-    try:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=_contact_markup(contact_user),
-            parse_mode="HTML",
-        )
-    except TelegramBadRequest:
-        # The other user restricts user-id links in buttons.
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text="🔙 В меню", callback_data="menu")]
-                ]
-            ),
-            parse_mode="HTML",
-        )
-        await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "⚠️ Не удалось создать кнопку «💬 Написать» для "
-                f"<b>{contact_user['name']}</b>: из-за настроек конфиденциальности "
-                "пользователя нельзя сформировать прямую ссылку для связи."
-            ),
-            parse_mode="HTML",
-        )
+    """Send a match notification. Try username link, then explain if unavailable."""
+    markup = _contact_markup(contact_user)
+    if markup is not None:
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=markup,
+                parse_mode="HTML",
+            )
+            return
+        except TelegramBadRequest:
+            pass
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="HTML",
+    )
+    await bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "💞 Взаимный лайк! К сожалению, не удалось получить контакт пользователя "
+            f"<b>{contact_user['name']}</b>. Попробуй найти его по username в Telegram вручную."
+        ),
+        parse_mode="HTML",
+    )
 
 
 async def _notify_incoming_like(

@@ -1,3 +1,5 @@
+import { renderInterestPicker } from "../components/interestPicker.js";
+
 const GENDER_OPTIONS = [
     { value: "male", label: "Парень" },
     { value: "female", label: "Девушка" },
@@ -14,11 +16,6 @@ const GOAL_OPTIONS = [
     { value: "relationship", label: "Отношения" },
     { value: "friendship", label: "Дружба" },
     { value: "flirt", label: "Флирт" },
-];
-
-const INTERESTS = [
-    "Музыка", "Спорт", "Кино", "Игры", "Путешествия",
-    "Книги", "Технологии", "Фото", "Рисование", "Кулинария",
 ];
 
 export function renderProfile(container, api) {
@@ -53,7 +50,7 @@ export function renderProfile(container, api) {
                         ${field("Пол", _label(GENDER_OPTIONS, user.gender), () => editChoice("gender", GENDER_OPTIONS))}
                         ${field("Ищу", _label(LOOKING_OPTIONS, user.looking_for), () => editChoice("looking_for", LOOKING_OPTIONS))}
                         ${field("Цель", _label(GOAL_OPTIONS, user.goal), () => editChoice("goal", GOAL_OPTIONS))}
-                        ${field("Интересы", interests, editInterests)}
+                        ${field("Интересы", interests, () => editInterests(user.interests))}
                         ${field("Город", user.city || "—", () => editText("city", "Введи город", user.city || ""))}
                     </div>
                 </div>
@@ -67,7 +64,7 @@ export function renderProfile(container, api) {
                 () => editChoice("gender", GENDER_OPTIONS),
                 () => editChoice("looking_for", LOOKING_OPTIONS),
                 () => editChoice("goal", GOAL_OPTIONS),
-                editInterests,
+                () => editInterests(user.interests),
                 () => editText("city", "Введи город", user.city || ""),
             ];
             btn.addEventListener("click", handlers[idx]);
@@ -119,18 +116,46 @@ export function renderProfile(container, api) {
         }
     }
 
-    async function editInterests() {
-        const current = await api.me();
-        const currentSet = new Set(current.interests ? current.interests.split(",").map((s) => s.trim()) : []);
-        const value = prompt("Введи интересы через запятую (минимум 3):", Array.from(currentSet).join(", "));
-        if (value === null) return;
-        const list = value.split(",").map((s) => s.trim()).filter(Boolean);
-        try {
-            await api.updateMe({ interests: list });
-            load();
-        } catch (e) {
-            alert(e.message);
-        }
+    async function editInterests(currentInterests) {
+        const currentSet = new Set(
+            currentInterests ? currentInterests.split(",").map((s) => s.trim()).filter(Boolean) : []
+        );
+        const editor = document.createElement("div");
+        editor.className = "screen active profile-editor";
+        editor.innerHTML = `
+            <h2>Редактировать интересы</h2>
+            <div id="interest-editor-content" style="flex:1; overflow-y:auto;"></div>
+            <div id="editor-error" class="error"></div>
+            <button id="saveInterests">Сохранить</button>
+            <button class="secondary" id="cancelInterests">Отмена</button>
+        `;
+        container.appendChild(editor);
+
+        const content = document.getElementById("interest-editor-content");
+        const errorEl = document.getElementById("editor-error");
+        const picker = await renderInterestPicker(content, api, currentSet, {
+            minCount: 3,
+            errorEl,
+        });
+
+        document.getElementById("saveInterests").addEventListener("click", async () => {
+            const err = picker.validate();
+            if (err) {
+                errorEl.textContent = err;
+                return;
+            }
+            try {
+                await api.updateMe({ interests: Array.from(currentSet) });
+                editor.remove();
+                load();
+            } catch (e) {
+                errorEl.textContent = e.message;
+            }
+        });
+
+        document.getElementById("cancelInterests").addEventListener("click", () => {
+            editor.remove();
+        });
     }
 
     function _label(options, value) {

@@ -6,7 +6,7 @@ from aiohttp import web
 from aiogram import Bot
 from aiogram.types import FSInputFile
 
-from config import MAX_AGE, MIN_AGE
+from config import INTEREST_CATEGORIES, MAX_AGE, MIN_AGE
 from database import (
     add_like,
     add_user,
@@ -22,6 +22,7 @@ from database import (
     update_user_filters,
     user_exists,
 )
+from keyboards import mini_app_button_keyboard
 from services.city_validation import is_valid_city, normalize_city
 from services.init_data import validate_init_data
 from services.matching import filter_candidates, score_candidates
@@ -84,6 +85,24 @@ async def register(request: web.Request) -> web.Response:
     except Exception as exc:
         return web.json_response({"error": str(exc)}, status=500)
 
+    bot: Bot | None = request.app.get("bot")
+    if bot:
+        try:
+            keyboard = mini_app_button_keyboard()
+            if keyboard:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="🎉 Регистрация успешно пройдена! Заходи в приложение",
+                    reply_markup=keyboard,
+                )
+            else:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="🎉 Регистрация успешно пройдена! Приложение скоро будет доступно.",
+                )
+        except Exception:
+            pass
+
     return web.json_response({"status": "ok"}, status=201)
 
 
@@ -99,6 +118,17 @@ async def validate_city_endpoint(request: web.Request) -> web.Response:
     if not is_clean_city(normalized):
         return web.json_response({"valid": False, "error": "Недопустимые слова в названии города"})
     return web.json_response({"valid": True, "normalized": normalized})
+
+
+@routes.get("/api/interests")
+async def interests_endpoint(request: web.Request) -> web.Response:
+    """Return interest categories for the Mini App registration/settings."""
+    return web.json_response(
+        [
+            {"key": key, "label": label, "items": items}
+            for key, label, items in INTEREST_CATEGORIES
+        ]
+    )
 
 
 @routes.post("/api/upload-photo")
@@ -377,10 +407,11 @@ async def get_photo(request: web.Request) -> web.Response:
     return web.Response(body=buf.read(), content_type="image/jpeg")
 
 
-def _contact_markup(user: dict) -> dict:
+def _contact_markup(user: dict) -> dict | None:
     username = user.get("username")
-    user_id = user["user_id"]
-    url = f"https://t.me/{username}" if username else f"tg://user?id={user_id}"
+    if not username:
+        return None
+    url = f"https://t.me/{username}"
     return {
         "inline_keyboard": [
             [{"text": "💬 Написать", "url": url}],
@@ -396,19 +427,32 @@ async def _send_match_notifications(bot: Bot, liker: dict, liked: dict) -> None:
         (liker["user_id"], liker_text, liked),
         (liked["user_id"], liked_text, liker),
     ):
-        try:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=_contact_markup(contact),
-                parse_mode="HTML",
-            )
-        except Exception:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode="HTML",
-            )
+        markup = _contact_markup(contact)
+        if markup is not None:
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=markup,
+                    parse_mode="HTML",
+                )
+                continue
+            except Exception:
+                pass
+
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode="HTML",
+        )
+        await bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "💞 Взаимный лайк! К сожалению, не удалось получить контакт пользователя "
+                f"<b>{contact['name']}</b>. Попробуй найти его по username в Telegram вручную."
+            ),
+            parse_mode="HTML",
+        )
 
 
 async def _send_incoming_like(bot: Bot, liker: dict, liked_id: int) -> None:

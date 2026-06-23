@@ -8,7 +8,7 @@ from aiohttp import web
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import browse, common, likes, menu, profile, registration, settings
+from handlers import browse, common, likes, profile, registration, settings
 from tunnel import start_tunnel, stop_tunnel
 from web_app import create_app
 
@@ -41,7 +41,6 @@ async def main() -> None:
     dp.include_routers(
         common.router,
         registration.router,
-        menu.router,
         profile.router,
         browse.router,
         likes.router,

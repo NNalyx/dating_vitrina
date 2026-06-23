@@ -1,8 +1,9 @@
 # keyboards.py
 
 from itertools import islice
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove, WebAppInfo
 from config import INTEREST_CATEGORIES, GENDER_OPTIONS, LOOKING_FOR_OPTIONS, GOAL_OPTIONS
+from tunnel import get_tunnel_url
 
 
 def _chunks(iterable, size: int):
@@ -78,16 +79,19 @@ def skip_photo_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Main menu inline keyboard."""
+def mini_app_button_keyboard() -> InlineKeyboardMarkup | None:
+    """Inline button that opens the Mini App."""
+    url = get_tunnel_url()
+    if not url:
+        return None
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📋 Моя анкета", callback_data="menu:profile")],
             [
-                InlineKeyboardButton(text="🔍 Смотреть анкеты", callback_data="menu:browse"),
-                InlineKeyboardButton(text="❤️ Мои лайки", callback_data="menu:likes"),
-            ],
-            [InlineKeyboardButton(text="⚙️ Настройки", callback_data="menu:settings")],
+                InlineKeyboardButton(
+                    text="🚀 Открыть приложение",
+                    web_app=WebAppInfo(url=url),
+                )
+            ]
         ]
     )
 
@@ -108,7 +112,6 @@ def profile_edit_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="✏️ Интересы", callback_data="edit:interests"),
                 InlineKeyboardButton(text="✏️ Фото", callback_data="edit:photo"),
             ],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
@@ -121,7 +124,6 @@ def browse_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="❤️ Лайк", callback_data="browse:like"),
                 InlineKeyboardButton(text="👎 Пропустить", callback_data="browse:skip"),
             ],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
@@ -134,21 +136,20 @@ def like_response_keyboard(liker_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="❤️ Лайк в ответ", callback_data=f"like_back:{liker_id}"),
                 InlineKeyboardButton(text="👎 Пропустить", callback_data=f"like_skip:{liker_id}"),
             ],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
 
-def write_link_keyboard(username: str | None, user_id: int) -> InlineKeyboardMarkup:
-    """Keyboard with a link to start a private chat."""
+def write_link_keyboard(username: str | None, user_id: int) -> InlineKeyboardMarkup | None:
+    """Keyboard with a link to start a private chat, or None if no usable link."""
     if username:
         url = f"https://t.me/{username}"
     else:
-        url = f"tg://user?id={user_id}"
+        # tg://user?id= deep links are unreliable for users the recipient has never chatted with.
+        return None
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💬 Написать", url=url)],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
@@ -163,7 +164,6 @@ def settings_keyboard(notifications_enabled: bool) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text=toggle_text, callback_data="settings:toggle")],
             [InlineKeyboardButton(text="🔍 Фильтры ленты", callback_data="settings:filters")],
-            [InlineKeyboardButton(text="🔙 В меню", callback_data="menu")],
         ]
     )
 
@@ -184,6 +184,5 @@ def filters_keyboard(min_age: int, max_age: int, only_my_city: bool) -> InlineKe
             ],
             [InlineKeyboardButton(text=city_text, callback_data="filter:toggle_city")],
             [InlineKeyboardButton(text="↩️ Сбросить", callback_data="filter:reset")],
-            [InlineKeyboardButton(text="🔙 Назад в настройки", callback_data="menu:settings")],
         ]
     )
