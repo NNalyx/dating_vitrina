@@ -89,6 +89,34 @@ export function renderRegistration(app, api, onComplete) {
             ).join("")}</div>`;
         } else if (id === "city") {
             container.innerHTML = `<input type="text" id="input" placeholder="Город" value="${profile.city}">`;
+            const input = document.getElementById("input");
+            const nextBtn = document.getElementById("nextBtn");
+            nextBtn.disabled = !profile.city;
+            let cityTimeout;
+            input.addEventListener("input", () => {
+                clearTimeout(cityTimeout);
+                profile.city = "";
+                nextBtn.disabled = true;
+                const city = input.value.trim();
+                if (!city) {
+                    document.getElementById("error").textContent = "";
+                    return;
+                }
+                cityTimeout = setTimeout(async () => {
+                    try {
+                        const data = await api.validateCity(city);
+                        if (data.valid) {
+                            document.getElementById("error").textContent = "";
+                            profile.city = data.normalized;
+                            nextBtn.disabled = false;
+                        } else {
+                            document.getElementById("error").textContent = data.error;
+                        }
+                    } catch (e) {
+                        document.getElementById("error").textContent = e.message;
+                    }
+                }, 400);
+            });
         } else if (id === "photo") {
             container.innerHTML = `
                 <p>Фото повышает количество лайков. Пока можешь пропустить.</p>
@@ -168,9 +196,7 @@ export function renderRegistration(app, api, onComplete) {
         } else if (current.id === "interests") {
             if (profile.interests.size < 3) return "Выбери минимум 3 интереса";
         } else if (current.id === "city") {
-            const city = document.getElementById("input").value.trim();
-            if (!city) return "Введи город";
-            profile.city = city;
+            if (!profile.city) return "Введи и подожди проверку города";
         }
         return null;
     }

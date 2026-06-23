@@ -40,10 +40,21 @@ async function uploadRequest(path, formData) {
 export const api = {
     auth: () => request("POST", "/api/auth", { initData }),
     register: (profile) => request("POST", "/api/register", { initData, ...profile }),
+    validateCity: (city) => request("POST", "/api/validate-city", { city }),
     me: () => request("GET", "/api/me"),
+    updateMe: (data) => request("PUT", "/api/me", data),
     uploadPhoto: (file) => {
         const formData = new FormData();
         formData.append("photo", file);
         return uploadRequest("/api/upload-photo", formData);
     },
+    photoUrl: (fileId) => `${BASE_URL}/api/photo/${fileId}`,
+    feed: () => request("GET", "/api/feed"),
+    like: (id) => request("POST", `/api/feed/${id}/like`),
+    skip: (id) => request("POST", `/api/feed/${id}/skip`),
+    likes: () => request("GET", "/api/likes"),
+    likeBack: (id) => request("POST", `/api/likes/${id}/like_back`),
+    skipLike: (id) => request("POST", `/api/likes/${id}/skip`),
+    getSettings: () => request("GET", "/api/settings"),
+    updateSettings: (data) => request("PUT", "/api/settings", data),
 };

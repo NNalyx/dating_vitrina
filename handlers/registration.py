@@ -293,4 +293,18 @@ async def _save_profile(
         return
 
     await message.answer("🎉 Регистрация завершена!")
-    await show_main_menu(message, state)
+    mini_app_url = get_tunnel_url()
+    if mini_app_url:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🚀 Открыть приложение",
+                        web_app=WebAppInfo(url=mini_app_url),
+                    )
+                ]
+            ]
+        )
+        await message.answer("Нажми кнопку ниже, чтобы перейти в приложение.", reply_markup=keyboard)
+    else:
+        await message.answer("Приложение скоро будет доступно.")
