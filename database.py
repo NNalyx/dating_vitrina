@@ -1,11 +1,13 @@
 # database.py
 
+import sqlite3
+
 import aiosqlite
 from config import DB_PATH
 
 
 async def init_db() -> None:
-    """Create all tables if they do not exist."""
+    """Create all tables and migrate existing ones."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
@@ -24,10 +26,18 @@ async def init_db() -> None:
                 filter_max_age INTEGER DEFAULT 100,
                 filter_only_my_city INTEGER DEFAULT 0,
                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
+                is_banned INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        try:
+            await db.execute(
+                "ALTER TABLE users ADD COLUMN is_banned INTEGER NOT NULL DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS likes (
@@ -50,7 +60,43 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reports (
+                report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reporter_id INTEGER NOT NULL,
+                reported_id INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                target_id INTEGER,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS interests (
+                category_key TEXT NOT NULL,
+                category_label TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (category_key, name)
+            )
+            """
+        )
         await db.commit()
+        await _seed_interests(db)
 
 
 async def user_exists(user_id: int) -> bool:
@@ -290,4 +336,226 @@ async def get_user_filters(user_id: int) -> dict:
         "min_age": user.get("filter_min_age", 16),
         "max_age": user.get("filter_max_age", 100),
         "only_my_city": bool(user.get("filter_only_my_city", 0)),
+    }
+
+
+async def _seed_interests(db: aiosqlite.Connection) -> None:
+    cursor = await db.execute("SELECT COUNT(*) FROM interests")
+    if (await cursor.fetchone())[0] > 0:
+        return
+    from config import INTEREST_CATEGORIES
+
+    rows = []
+    for cat_key, cat_label, items in INTEREST_CATEGORIES:
+        for idx, name in enumerate(items):
+            rows.append((cat_key, cat_label, name, idx))
+    await db.executemany(
+        "INSERT INTO interests (category_key, category_label, name, sort_order) VALUES (?, ?, ?, ?)",
+        rows,
+    )
+    await db.commit()
+
+
+async def ban_user(user_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET is_banned = 1 WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
+async def unban_user(user_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET is_banned = 0 WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
+async def is_banned(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT is_banned FROM users WHERE user_id = ?", (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return bool(row[0]) if row else False
+
+
+async def delete_user(user_id: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        await db.execute(
+            "DELETE FROM likes WHERE from_user_id = ? OR to_user_id = ?",
+            (user_id, user_id),
+        )
+        await db.execute(
+            "DELETE FROM views WHERE viewer_id = ? OR viewed_id = ?",
+            (user_id, user_id),
+        )
+        await db.commit()
+
+
+async def get_user_by_username(username: str) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE username = ? COLLATE NOCASE", (username,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def add_report(reporter_id: int, reported_id: int, reason: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO reports (reporter_id, reported_id, reason) VALUES (?, ?, ?)",
+            (reporter_id, reported_id, reason),
+        )
+        await db.commit()
+
+
+async def get_pending_reports(limit: int = 10) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM reports WHERE status = 'pending' ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_report(report_id: int) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM reports WHERE report_id = ?", (report_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def resolve_report(report_id: int, status: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE reports SET status = ? WHERE report_id = ?",
+            (status, report_id),
+        )
+        await db.commit()
+
+
+async def add_admin_log(
+    admin_id: int,
+    action: str,
+    target_id: int | None = None,
+    details: str = "",
+) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO admin_logs (admin_id, action, target_id, details) VALUES (?, ?, ?, ?)",
+            (admin_id, action, target_id, details),
+        )
+        await db.commit()
+
+
+async def get_admin_logs(limit: int = 20) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM admin_logs ORDER BY created_at DESC LIMIT ?", (limit,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_interests_from_db() -> list[dict]:
+    """Return interests grouped by category for the Mini App."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT category_key, category_label, name FROM interests ORDER BY category_key, sort_order"
+        ) as cursor:
+            rows = await cursor.fetchall()
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        key = row["category_key"]
+        if key not in grouped:
+            grouped[key] = {"key": key, "label": row["category_label"], "items": []}
+        grouped[key]["items"].append(row["name"])
+    return list(grouped.values())
+
+
+async def add_interest(category_key: str, category_label: str, name: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO interests (category_key, category_label, name, sort_order)
+            VALUES (
+                ?, ?, ?,
+                (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM interests WHERE category_key = ?)
+            )
+            """,
+            (category_key, category_label, name, category_key),
+        )
+        await db.commit()
+
+
+async def remove_interest(category_key: str, name: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM interests WHERE category_key = ? AND name = ?",
+            (category_key, name),
+        )
+        await db.commit()
+
+
+async def remove_category(category_key: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM interests WHERE category_key = ?", (category_key,))
+        await db.commit()
+
+
+async def get_admin_stats() -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users") as cursor:
+            total_users = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= date('now')"
+        ) as cursor:
+            new_today = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= date('now', '-7 days')"
+        ) as cursor:
+            new_week = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE created_at >= date('now', '-30 days')"
+        ) as cursor:
+            new_month = (await cursor.fetchone())[0]
+        async with db.execute("SELECT COUNT(*) FROM likes") as cursor:
+            total_likes = (await cursor.fetchone())[0]
+        async with db.execute("SELECT COUNT(*) FROM views") as cursor:
+            total_views = (await cursor.fetchone())[0]
+        async with db.execute(
+            """
+            SELECT COUNT(DISTINCT user_id) FROM (
+                SELECT from_user_id AS user_id FROM likes
+                UNION
+                SELECT to_user_id AS user_id FROM likes
+                UNION
+                SELECT viewer_id AS user_id FROM views
+                UNION
+                SELECT viewed_id AS user_id FROM views
+            )
+            """
+        ) as cursor:
+            active_users = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM reports WHERE status = 'pending'"
+        ) as cursor:
+            pending_reports = (await cursor.fetchone())[0]
+    return {
+        "total_users": total_users,
+        "new_today": new_today,
+        "new_week": new_week,
+        "new_month": new_month,
+        "total_likes": total_likes,
+        "total_views": total_views,
+        "active_users": active_users,
+        "pending_reports": pending_reports,
     }

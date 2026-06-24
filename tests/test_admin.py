@@ -40,3 +40,41 @@ class TestIsAdmin:
         from services.admin import is_admin
 
         assert is_admin(None) is False
+
+
+class TestAdminDatabase:
+    @pytest.fixture
+    async def db_path(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "admin_test.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db
+
+        await init_db()
+        return path
+
+    async def test_ban_and_unban_user(self, db_path):
+        from database import add_user, ban_user, is_banned, unban_user
+
+        await add_user(
+            user_id=100,
+            username="test",
+            age=20,
+            name="Test",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        assert await is_banned(100) is False
+        await ban_user(100)
+        assert await is_banned(100) is True
+        await unban_user(100)
+        assert await is_banned(100) is False
+
+    async def test_interests_seeded_from_config(self, db_path):
+        from database import get_interests_from_db
+
+        categories = await get_interests_from_db()
+        assert len(categories) > 0
+        assert all("items" in c and c["items"] for c in categories)
