@@ -39,6 +39,18 @@ def _current_user_id(request: web.Request) -> int | None:
     return validate_init_data(request.headers.get("X-Init-Data", ""))
 
 
+async def _active_user(request: web.Request) -> dict:
+    user_id = _current_user_id(request)
+    if user_id is None:
+        raise web.HTTPUnauthorized(text="Invalid initData")
+    user = await get_user(user_id)
+    if user is None:
+        raise web.HTTPNotFound(text="User not found")
+    if user.get("is_banned"):
+        raise web.HTTPForbidden(text="Account banned")
+    return user
+
+
 @routes.post("/api/auth")
 async def auth(request: web.Request) -> web.Response:
     body = await request.json()
@@ -133,10 +145,8 @@ async def interests_endpoint(request: web.Request) -> web.Response:
 
 @routes.post("/api/upload-photo")
 async def upload_photo(request: web.Request) -> web.Response:
-    init_data = request.headers.get("X-Init-Data", "")
-    user_id = validate_init_data(init_data)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     reader = await request.multipart()
     field = await reader.next()
@@ -178,26 +188,16 @@ async def upload_photo(request: web.Request) -> web.Response:
 
 @routes.get("/api/me")
 async def me(request: web.Request) -> web.Response:
-    init_data = request.headers.get("X-Init-Data", "")
-    user_id = validate_init_data(init_data)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
-    user = await get_user(user_id)
-    if user is None:
-        return web.json_response({"error": "User not found"}, status=404)
+    user = await _active_user(request)
     return web.json_response(user)
 
 
 @routes.put("/api/me")
 async def update_me(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     body = await request.json()
-    user = await get_user(user_id)
-    if user is None:
-        return web.json_response({"error": "User not found"}, status=404)
 
     fields = {}
 
@@ -249,13 +249,7 @@ async def update_me(request: web.Request) -> web.Response:
 
 @routes.get("/api/feed")
 async def feed(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
-
-    user = await get_user(user_id)
-    if user is None:
-        return web.json_response({"error": "User not found"}, status=404)
+    user = await _active_user(request)
 
     candidates = await get_all_users()
     viewed_ids = await get_viewed_ids(user_id)
@@ -271,9 +265,8 @@ async def feed(request: web.Request) -> web.Response:
 
 @routes.post("/api/feed/{id}/like")
 async def feed_like(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     candidate_id = int(request.match_info["id"])
     await add_view(user_id, candidate_id)
@@ -297,9 +290,8 @@ async def feed_like(request: web.Request) -> web.Response:
 
 @routes.post("/api/feed/{id}/skip")
 async def feed_skip(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     candidate_id = int(request.match_info["id"])
     await add_view(user_id, candidate_id)
@@ -308,9 +300,8 @@ async def feed_skip(request: web.Request) -> web.Response:
 
 @routes.get("/api/likes")
 async def likes(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     result = []
     for candidate in await get_all_users():
@@ -324,9 +315,8 @@ async def likes(request: web.Request) -> web.Response:
 
 @routes.post("/api/likes/{id}/like_back")
 async def like_back_endpoint(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     liker_id = int(request.match_info["id"])
     await add_like(user_id, liker_id)
@@ -343,9 +333,8 @@ async def like_back_endpoint(request: web.Request) -> web.Response:
 
 @routes.post("/api/likes/{id}/skip")
 async def skip_like_endpoint(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     liker_id = int(request.match_info["id"])
     await add_view(user_id, liker_id)
@@ -354,9 +343,8 @@ async def skip_like_endpoint(request: web.Request) -> web.Response:
 
 @routes.get("/api/settings")
 async def settings_get(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     filters = await get_user_filters(user_id)
     notifications = await get_notifications_enabled(user_id)
@@ -365,9 +353,8 @@ async def settings_get(request: web.Request) -> web.Response:
 
 @routes.put("/api/settings")
 async def settings_put(request: web.Request) -> web.Response:
-    user_id = _current_user_id(request)
-    if user_id is None:
-        return web.json_response({"error": "Invalid initData"}, status=401)
+    user = await _active_user(request)
+    user_id = user["user_id"]
 
     body = await request.json()
     min_age = int(body.get("min_age", MIN_AGE))

@@ -78,3 +78,84 @@ class TestAdminDatabase:
         categories = await get_interests_from_db()
         assert len(categories) > 0
         assert all("items" in c and c["items"] for c in categories)
+
+
+class TestBanMiddleware:
+    @pytest.fixture
+    async def db_path(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "ban_test.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user, ban_user
+
+        await init_db()
+        await add_user(
+            user_id=200,
+            username="banned",
+            age=20,
+            name="Banned",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        await ban_user(200)
+        return path
+
+    async def test_banned_message_is_blocked(self, db_path):
+        from aiogram.types import Message
+        from middlewares.ban import BanMiddleware
+
+        middleware = BanMiddleware()
+        event = MagicMock(spec=Message)
+        event.from_user = MagicMock(id=200)
+        event.answer = AsyncMock()
+        handler = AsyncMock()
+        result = await middleware(handler, event, {})
+        assert result is None
+        event.answer.assert_awaited_once_with("Аккаунт заблокирован.")
+        handler.assert_not_awaited()
+
+    async def test_owner_bypasses_ban(self, db_path, monkeypatch):
+        monkeypatch.setattr("middlewares.ban.OWNER_ID", 200)
+        from aiogram.types import Message
+        from middlewares.ban import BanMiddleware
+
+        middleware = BanMiddleware()
+        event = MagicMock(spec=Message)
+        event.from_user = MagicMock(id=200)
+        event.answer = AsyncMock()
+        handler = AsyncMock(return_value="ok")
+        result = await middleware(handler, event, {})
+        assert result == "ok"
+
+
+class TestWebBanGuard:
+    async def test_banned_user_gets_403_on_me(self, aiohttp_client, tmp_path, monkeypatch):
+        path = str(tmp_path / "ban_web.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user, ban_user
+
+        await init_db()
+        await add_user(
+            user_id=600,
+            username="banned",
+            age=20,
+            name="Banned",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        await ban_user(600)
+        from tests.test_web_auth import _make_init_data
+
+        monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+        from web_app import create_app
+
+        app = create_app()
+        cli = await aiohttp_client(app)
+        init_data = _make_init_data(600, "test_token_12345")
+        resp = await cli.get("/api/me", headers={"X-Init-Data": init_data})
+        assert resp.status == 403
