@@ -159,3 +159,27 @@ class TestWebBanGuard:
         init_data = _make_init_data(600, "test_token_12345")
         resp = await cli.get("/api/me", headers={"X-Init-Data": init_data})
         assert resp.status == 403
+
+
+class TestAdminCommand:
+    def test_admin_denied_for_regular_user(self, monkeypatch):
+        monkeypatch.setattr("services.admin.OWNER_ID", 8241460494)
+        from handlers.admin import cmd_admin
+
+        msg = _make_message(111)
+        state = MagicMock()
+        state.clear = AsyncMock()
+        asyncio.run(cmd_admin(msg, state))
+        msg.answer.assert_awaited_once_with("Нет доступа.")
+
+    def test_admin_opens_menu_for_owner(self, monkeypatch):
+        monkeypatch.setattr("services.admin.OWNER_ID", 8241460494)
+        from handlers.admin import cmd_admin
+
+        msg = _make_message(8241460494)
+        state = MagicMock()
+        state.clear = AsyncMock()
+        asyncio.run(cmd_admin(msg, state))
+        args, kwargs = msg.answer.await_args
+        assert "Админ-панель" in args[0]
+        assert "reply_markup" in kwargs

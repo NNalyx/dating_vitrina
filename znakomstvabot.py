@@ -8,7 +8,7 @@ from aiohttp import web
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import browse, common, likes, profile, registration, settings
+from handlers import admin, browse, common, likes, profile, registration, settings
 from tunnel import start_tunnel, stop_tunnel
 from web_app import create_app
 
@@ -45,6 +45,7 @@ async def main() -> None:
         browse.router,
         likes.router,
         settings.router,
+        admin.router,
     )
 
     app = create_app(bot)

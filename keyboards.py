@@ -186,3 +186,34 @@ def filters_keyboard(min_age: int, max_age: int, only_my_city: bool) -> InlineKe
             [InlineKeyboardButton(text="↩️ Сбросить", callback_data="filter:reset")],
         ]
     )
+
+
+
+def admin_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📊 Статистика", callback_data="admin:stats"),
+                InlineKeyboardButton(text="👤 Пользователи", callback_data="admin:users"),
+            ],
+            [
+                InlineKeyboardButton(text="🚨 Жалобы", callback_data="admin:reports"),
+                InlineKeyboardButton(text="📢 Рассылка", callback_data="admin:broadcast"),
+            ],
+            [
+                InlineKeyboardButton(text="🏷 Интересы", callback_data="admin:interests"),
+                InlineKeyboardButton(text="🚫 Баны", callback_data="admin:bans"),
+            ],
+            [
+                InlineKeyboardButton(text="📋 Логи админа", callback_data="admin:logs"),
+            ],
+        ]
+    )
+
+
+def admin_back_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ В меню", callback_data="admin:menu")]
+        ]
+    )
