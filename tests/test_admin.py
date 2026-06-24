@@ -183,3 +183,34 @@ class TestAdminCommand:
         args, kwargs = msg.answer.await_args
         assert "Админ-панель" in args[0]
         assert "reply_markup" in kwargs
+
+
+class TestAdminUserLookup:
+    async def test_lookup_by_user_id(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "lookup.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user
+
+        await init_db()
+        await add_user(
+            user_id=300,
+            username="alice",
+            age=22,
+            name="Alice",
+            gender="female",
+            looking_for="male",
+            goal="relationship",
+            interests=["Аниме", "Кино"],
+            city="Москва",
+        )
+
+        from handlers.admin import admin_user_lookup
+
+        msg = _make_message(8241460494)
+        msg.text = "300"
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_user_lookup(msg, state)
+        args, _ = msg.answer.await_args
+        assert "Alice" in args[0]
