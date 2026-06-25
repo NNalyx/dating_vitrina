@@ -58,4 +58,5 @@ export const api = {
     skipLike: (id) => request("POST", `/api/likes/${id}/skip`),
     getSettings: () => request("GET", "/api/settings"),
     updateSettings: (data) => request("PUT", "/api/settings", data),
+    report: (id, reason) => request("POST", "/api/report", { reported_id: id, reason }),
 };

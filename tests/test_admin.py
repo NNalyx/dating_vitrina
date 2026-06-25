@@ -241,3 +241,59 @@ class TestAdminActions:
         state = MagicMock()
         await admin_ban_toggle(cb, state)
         assert await is_banned(400) is True
+
+
+class TestReportEndpoint:
+    @pytest.fixture
+    async def client(self, aiohttp_client, tmp_path, monkeypatch):
+        path = str(tmp_path / "report_test.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user
+
+        await init_db()
+        await add_user(
+            user_id=10,
+            username="reporter",
+            age=20,
+            name="Reporter",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        await add_user(
+            user_id=11,
+            username="bad",
+            age=20,
+            name="Bad",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        from tests.test_web_auth import _make_init_data
+
+        monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+        from web_app import create_app
+
+        app = create_app()
+        cli = await aiohttp_client(app)
+        return cli, _make_init_data
+
+    async def test_report_creates_pending_report(self, client):
+        cli, make_init = client
+        init_data = make_init(10, "test_token_12345")
+        resp = await cli.post(
+            "/api/report",
+            json={"reported_id": 11, "reason": "Спам"},
+            headers={"X-Init-Data": init_data},
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "ok"
+        from database import get_pending_reports
+
+        reports = await get_pending_reports()
+        assert len(reports) == 1
+        assert reports[0]["reason"] == "Спам"

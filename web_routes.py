@@ -9,6 +9,7 @@ from aiogram.types import FSInputFile
 from config import INTEREST_CATEGORIES, MAX_AGE, MIN_AGE
 from database import (
     add_like,
+    add_report,
     add_user,
     add_view,
     get_all_users,
@@ -116,6 +117,23 @@ async def register(request: web.Request) -> web.Response:
             pass
 
     return web.json_response({"status": "ok"}, status=201)
+
+
+@routes.post("/api/report")
+async def report_user(request: web.Request) -> web.Response:
+    user = await _active_user(request)
+    body = await request.json()
+    reported_id = int(body.get("reported_id", 0))
+    reason = str(body.get("reason", "")).strip()
+    if reported_id == 0 or not reason:
+        return web.json_response(
+            {"error": "Missing reported_id or reason"}, status=400
+        )
+    reported = await get_user(reported_id)
+    if reported is None:
+        return web.json_response({"error": "User not found"}, status=404)
+    await add_report(user["user_id"], reported_id, reason)
+    return web.json_response({"status": "ok"})
 
 
 @routes.post("/api/validate-city")

@@ -51,11 +51,25 @@ export function renderFeed(container, api, onMutual) {
                     <button class="secondary action-skip" id="skipBtn">✕</button>
                     <button class="action-like" id="likeBtn">♥</button>
                 </div>
+                <div class="feed-report">
+                    <button class="action-report" id="reportBtn">🚩 Пожаловаться</button>
+                </div>
             </div>
         `;
 
         document.getElementById("skipBtn").addEventListener("click", () => act("skip"));
         document.getElementById("likeBtn").addEventListener("click", () => act("like"));
+        document.getElementById("reportBtn").addEventListener("click", async () => {
+            if (!current) return;
+            const reason = window.prompt("Причина жалобы:");
+            if (!reason) return;
+            try {
+                await api.report(current.user_id, reason);
+                window.alert("Жалоба отправлена.");
+            } catch (e) {
+                window.alert("Ошибка: " + e.message);
+            }
+        });
         initSwipe();
     }
 
