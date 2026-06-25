@@ -1,4 +1,5 @@
 import asyncio
+import unittest
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -344,3 +345,18 @@ class TestAdminStats:
         await admin_stats(cb)
         args, _ = cb.message.edit_text.await_args
         assert "Всего пользователей: 1" in args[0]
+
+
+class TestAdminBroadcast:
+    def test_broadcast_starts_text_input(self, monkeypatch):
+        monkeypatch.setattr("services.admin.OWNER_ID", 8241460494)
+        from handlers.admin import admin_broadcast_start
+
+        cb = _make_callback(8241460494, "admin:broadcast")
+        state = MagicMock()
+        state.set_state = AsyncMock()
+        asyncio.run(admin_broadcast_start(cb, state))
+        cb.message.edit_text.assert_awaited_once_with(
+            "Введи текст рассылки:", reply_markup=unittest.mock.ANY
+        )
+        state.set_state.assert_awaited_once()

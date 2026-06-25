@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 
-from aiogram import Router, types, F
+from aiogram import Bot, Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
@@ -321,4 +321,60 @@ async def admin_export(callback: types.CallbackQuery) -> None:
 
     await callback.message.answer_document(FSInputFile(path), caption="Экспорт данных")
     os.remove(path)
+    await callback.answer()
+
+
+
+@router.callback_query(F.data == "admin:broadcast")
+async def admin_broadcast_start(callback: types.CallbackQuery, state: FSMContext) -> None:
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Введи текст рассылки:",
+            reply_markup=admin_back_menu_keyboard(),
+        )
+    await state.set_state(AdminMenu.broadcast_text)
+    await callback.answer()
+
+
+@router.message(AdminMenu.broadcast_text)
+async def admin_broadcast_preview(message: types.Message, state: FSMContext) -> None:
+    text = message.text or ""
+    await state.update_data(broadcast_text=text)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Отправить всем", callback_data="admin:broadcast:send")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin:menu")],
+        ]
+    )
+    await message.answer(
+        f"<b>Предпросмотр:</b>\n\n{text}",
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminMenu.broadcast_confirm)
+
+
+@router.callback_query(F.data == "admin:broadcast:send", AdminMenu.broadcast_confirm)
+async def admin_broadcast_send(
+    callback: types.CallbackQuery, state: FSMContext, bot: Bot
+) -> None:
+    data = await state.get_data()
+    text = data.get("broadcast_text", "")
+    users = await get_all_users()
+    sent = 0
+    for user in users:
+        if user.get("is_banned"):
+            continue
+        try:
+            await bot.send_message(chat_id=user["user_id"], text=text)
+            sent += 1
+        except Exception:
+            pass
+    await add_admin_log(callback.from_user.id, "broadcast", details=f"sent={sent}")
+    await state.clear()
+    if callback.message is not None:
+        await callback.message.edit_text(
+            f"Рассылка завершена. Доставлено: {sent}",
+            reply_markup=admin_menu_keyboard(),
+        )
     await callback.answer()
