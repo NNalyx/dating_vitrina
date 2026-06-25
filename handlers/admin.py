@@ -1,12 +1,18 @@
+import json
+import os
+import tempfile
+
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database import (
     add_admin_log,
     ban_user,
     delete_user,
+    get_admin_stats,
+    get_all_users,
     get_pending_reports,
     get_report,
     get_user,
@@ -274,3 +280,45 @@ async def admin_dismiss_report(callback: types.CallbackQuery, state: FSMContext)
     )
     await callback.answer("Жалоба отклонена.")
     await admin_reports(callback, state)
+
+
+
+@router.callback_query(F.data == "admin:stats")
+async def admin_stats(callback: types.CallbackQuery) -> None:
+    stats = await get_admin_stats()
+    text = (
+        f"<b>📊 Статистика</b>\n\n"
+        f"Всего пользователей: {stats['total_users']}\n"
+        f"Новых за сутки: {stats['new_today']}\n"
+        f"Новых за неделю: {stats['new_week']}\n"
+        f"Новых за месяц: {stats['new_month']}\n"
+        f"Всего лайков: {stats['total_likes']}\n"
+        f"Всего просмотров: {stats['total_views']}\n"
+        f"Активных пользователей: {stats['active_users']}\n"
+        f"Открытых жалоб: {stats['pending_reports']}"
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📁 Экспорт JSON", callback_data="admin:export")],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")],
+        ]
+    )
+    if callback.message is not None:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:export")
+async def admin_export(callback: types.CallbackQuery) -> None:
+    stats = await get_admin_stats()
+    users = await get_all_users()
+    reports = await get_pending_reports(limit=1000)
+    data = {"stats": stats, "users": users, "reports": reports}
+
+    fd, path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    await callback.message.answer_document(FSInputFile(path), caption="Экспорт данных")
+    os.remove(path)
+    await callback.answer()

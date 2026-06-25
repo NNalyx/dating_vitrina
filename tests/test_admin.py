@@ -317,3 +317,30 @@ class TestAdminReports:
         await admin_reports(cb, state)
         args, _ = cb.message.edit_text.await_args
         assert "Открытые жалобы" in args[0]
+
+
+class TestAdminStats:
+    async def test_admin_stats_button_shows_numbers(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "stats.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user
+
+        await init_db()
+        await add_user(
+            user_id=500,
+            username="u",
+            age=20,
+            name="U",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+
+        from handlers.admin import admin_stats
+
+        cb = _make_callback(8241460494, "admin:stats")
+        await admin_stats(cb)
+        args, _ = cb.message.edit_text.await_args
+        assert "Всего пользователей: 1" in args[0]
