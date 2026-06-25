@@ -386,3 +386,23 @@ class TestInterestsManagement:
         data = await resp.json()
         categories = {c["key"]: c["items"] for c in data}
         assert "Test Game" in categories.get("games", [])
+
+
+class TestAdminLogs:
+    async def test_admin_logs_button_shows_entries(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "logs.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_admin_log
+
+        await init_db()
+        await add_admin_log(8241460494, "ban", 123, "test")
+
+        from handlers.admin import admin_logs
+
+        cb = _make_callback(8241460494, "admin:logs")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_logs(cb, state)
+        args, _ = cb.message.edit_text.await_args
+        assert "ban" in args[0]

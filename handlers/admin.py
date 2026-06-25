@@ -12,6 +12,7 @@ from database import (
     add_interest,
     ban_user,
     delete_user,
+    get_admin_logs,
     get_admin_stats,
     get_all_users,
     get_interests_from_db,
@@ -504,3 +505,27 @@ async def admin_remove_category(callback: types.CallbackQuery, state: FSMContext
     await add_admin_log(callback.from_user.id, "remove_category", details=key)
     await callback.answer("Категория удалена.")
     await admin_interests(callback, state)
+
+
+
+@router.callback_query(F.data == "admin:logs")
+async def admin_logs(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    logs = await get_admin_logs(limit=20)
+    if not logs:
+        text = "Логи пусты."
+    else:
+        lines = ["<b>📋 Последние действия админа</b>"]
+        for log in logs:
+            target = f" → {log['target_id']}" if log["target_id"] else ""
+            lines.append(
+                f"{log['created_at']}: {log['action']}{target} {log['details'] or ''}"
+            )
+        text = "\n".join(lines)
+    if callback.message is not None:
+        await callback.message.edit_text(
+            text,
+            reply_markup=admin_menu_keyboard(),
+            parse_mode="HTML",
+        )
+    await callback.answer()
