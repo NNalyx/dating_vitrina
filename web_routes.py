@@ -13,6 +13,7 @@ from database import (
     add_user,
     add_view,
     get_all_users,
+    get_interests_from_db,
     get_notifications_enabled,
     get_user,
     get_user_filters,
@@ -153,12 +154,8 @@ async def validate_city_endpoint(request: web.Request) -> web.Response:
 @routes.get("/api/interests")
 async def interests_endpoint(request: web.Request) -> web.Response:
     """Return interest categories for the Mini App registration/settings."""
-    return web.json_response(
-        [
-            {"key": key, "label": label, "items": items}
-            for key, label, items in INTEREST_CATEGORIES
-        ]
-    )
+    categories = await get_interests_from_db()
+    return web.json_response(categories)
 
 
 @routes.post("/api/upload-photo")

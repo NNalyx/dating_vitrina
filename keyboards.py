@@ -217,3 +217,27 @@ def admin_back_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="↩️ В меню", callback_data="admin:menu")]
         ]
     )
+
+
+
+def admin_interests_keyboard(categories: list[dict]) -> InlineKeyboardMarkup:
+    rows = []
+    for cat in categories:
+        rows.append(
+            [InlineKeyboardButton(text=cat["label"], callback_data=f"admin:intcat:{cat['key']}")]
+        )
+    rows.append([InlineKeyboardButton(text="➕ Добавить категорию", callback_data="admin:intcat:add")])
+    rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_interest_category_keyboard(cat_key: str, items: list[str]) -> InlineKeyboardMarkup:
+    rows = []
+    for item in items:
+        rows.append(
+            [InlineKeyboardButton(text=f"❌ {item}", callback_data=f"admin:intremove:{cat_key}:{item}")]
+        )
+    rows.append([InlineKeyboardButton(text="➕ Добавить интерес", callback_data=f"admin:intadd:{cat_key}")])
+    rows.append([InlineKeyboardButton(text="🗑 Удалить категорию", callback_data=f"admin:intcatdel:{cat_key}")])
+    rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data="admin:interests")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

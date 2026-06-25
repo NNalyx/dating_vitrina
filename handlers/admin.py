@@ -9,18 +9,27 @@ from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarku
 
 from database import (
     add_admin_log,
+    add_interest,
     ban_user,
     delete_user,
     get_admin_stats,
     get_all_users,
+    get_interests_from_db,
     get_pending_reports,
     get_report,
     get_user,
     get_user_by_username,
+    remove_category,
+    remove_interest,
     resolve_report,
     unban_user,
 )
-from keyboards import admin_back_menu_keyboard, admin_menu_keyboard
+from keyboards import (
+    admin_back_menu_keyboard,
+    admin_interest_category_keyboard,
+    admin_interests_keyboard,
+    admin_menu_keyboard,
+)
 from services.admin import is_admin
 from services.profile import format_profile
 from states import AdminMenu
@@ -378,3 +387,120 @@ async def admin_broadcast_send(
             reply_markup=admin_menu_keyboard(),
         )
     await callback.answer()
+
+
+
+@router.callback_query(F.data == "admin:interests")
+async def admin_interests(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    categories = await get_interests_from_db()
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "🏷 Управление интересами",
+            reply_markup=admin_interests_keyboard(categories),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:intcat:"))
+async def admin_interest_category(callback: types.CallbackQuery, state: FSMContext) -> None:
+    key = callback.data.split(":", 2)[2]
+    if key == "add":
+        if callback.message is not None:
+            await callback.message.edit_text(
+                "Введи ключ и название категории через запятую (например: games, 🎮 Игры):",
+                reply_markup=admin_back_menu_keyboard(),
+            )
+        await state.set_state(AdminMenu.interest_category_key)
+        await callback.answer()
+        return
+
+    categories = await get_interests_from_db()
+    cat = next((c for c in categories if c["key"] == key), None)
+    if cat is None:
+        await callback.answer("Категория не найдена.")
+        return
+    if callback.message is not None:
+        await callback.message.edit_text(
+            f"{cat['label']}\n\nВыбери интерес для удаления или добавь новый:",
+            reply_markup=admin_interest_category_keyboard(cat["key"], cat["items"]),
+        )
+    await callback.answer()
+
+
+@router.message(AdminMenu.interest_category_key)
+async def admin_add_category(message: types.Message, state: FSMContext) -> None:
+    text = message.text or ""
+    parts = [p.strip() for p in text.split(",", 1)]
+    if len(parts) != 2:
+        await message.answer("Нужно ввести ключ и название через запятую.")
+        return
+    key, label = parts
+    await state.update_data(interest_key=key, interest_label=label)
+    await message.answer(
+        "Введи название интереса для этой категории:",
+        reply_markup=admin_back_menu_keyboard(),
+    )
+    await state.set_state(AdminMenu.interest_name)
+
+
+@router.callback_query(F.data.startswith("admin:intadd:"))
+async def admin_add_interest_start(callback: types.CallbackQuery, state: FSMContext) -> None:
+    key = callback.data.split(":", 2)[2]
+    categories = await get_interests_from_db()
+    cat = next((c for c in categories if c["key"] == key), None)
+    if cat is None:
+        await callback.answer("Категория не найдена.")
+        return
+    await state.update_data(interest_key=key, interest_label=cat["label"])
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Введи название нового интереса:",
+            reply_markup=admin_back_menu_keyboard(),
+        )
+    await state.set_state(AdminMenu.interest_name)
+    await callback.answer()
+
+
+@router.message(AdminMenu.interest_name)
+async def admin_save_interest(message: types.Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    key = data.get("interest_key")
+    label = data.get("interest_label")
+    name = (message.text or "").strip()
+    if not key or not label or not name:
+        await message.answer("Ошибка: не хватает данных.")
+        return
+    await add_interest(key, label, name)
+    await add_admin_log(
+        message.from_user.id,
+        "add_interest",
+        details=f"{key}/{name}",
+    )
+    await message.answer(
+        f"Интерес '{name}' добавлен.",
+        reply_markup=admin_menu_keyboard(),
+    )
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin:intremove:"))
+async def admin_remove_interest(callback: types.CallbackQuery, state: FSMContext) -> None:
+    _, _, key, name = callback.data.split(":", 3)
+    await remove_interest(key, name)
+    await add_admin_log(
+        callback.from_user.id,
+        "remove_interest",
+        details=f"{key}/{name}",
+    )
+    await callback.answer("Интерес удалён.")
+    await admin_interest_category(callback, state)
+
+
+@router.callback_query(F.data.startswith("admin:intcatdel:"))
+async def admin_remove_category(callback: types.CallbackQuery, state: FSMContext) -> None:
+    key = callback.data.split(":", 2)[2]
+    await remove_category(key)
+    await add_admin_log(callback.from_user.id, "remove_category", details=key)
+    await callback.answer("Категория удалена.")
+    await admin_interests(callback, state)

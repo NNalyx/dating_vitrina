@@ -360,3 +360,29 @@ class TestAdminBroadcast:
             "Введи текст рассылки:", reply_markup=unittest.mock.ANY
         )
         state.set_state.assert_awaited_once()
+
+
+class TestInterestsManagement:
+    @pytest.fixture
+    async def db_path(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "interests.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db
+
+        await init_db()
+        return path
+
+    async def test_api_interests_returns_db_items(self, db_path, aiohttp_client):
+        from database import add_interest
+
+        await add_interest("games", "🎮 Игры", "Test Game")
+        from web_app import create_app
+
+        app = create_app()
+        cli = await aiohttp_client(app)
+        resp = await cli.get("/api/interests")
+        assert resp.status == 200
+        data = await resp.json()
+        categories = {c["key"]: c["items"] for c in data}
+        assert "Test Game" in categories.get("games", [])
