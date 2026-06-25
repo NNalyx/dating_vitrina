@@ -297,3 +297,23 @@ class TestReportEndpoint:
         reports = await get_pending_reports()
         assert len(reports) == 1
         assert reports[0]["reason"] == "Спам"
+
+
+class TestAdminReports:
+    async def test_admin_reports_button_opens_list(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "admin_reports.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_report
+
+        await init_db()
+        await add_report(1, 2, "Спам")
+
+        from handlers.admin import admin_reports
+
+        cb = _make_callback(8241460494, "admin:reports")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_reports(cb, state)
+        args, _ = cb.message.edit_text.await_args
+        assert "Открытые жалобы" in args[0]

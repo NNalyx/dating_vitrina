@@ -7,8 +7,11 @@ from database import (
     add_admin_log,
     ban_user,
     delete_user,
+    get_pending_reports,
+    get_report,
     get_user,
     get_user_by_username,
+    resolve_report,
     unban_user,
 )
 from keyboards import admin_back_menu_keyboard, admin_menu_keyboard
@@ -169,3 +172,105 @@ async def admin_delete_user(callback: types.CallbackQuery, state: FSMContext) ->
             "Анкета удалена.",
             reply_markup=admin_menu_keyboard(),
         )
+
+
+
+@router.callback_query(F.data == "admin:reports")
+async def admin_reports(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    reports = await get_pending_reports(limit=10)
+    if not reports:
+        if callback.message is not None:
+            await callback.message.edit_text(
+                "Нет открытых жалоб.",
+                reply_markup=admin_menu_keyboard(),
+            )
+        await callback.answer()
+        return
+
+    rows = []
+    for r in reports:
+        text = f"#{r['report_id']} от {r['reporter_id']} на {r['reported_id']}"
+        rows.append(
+            [InlineKeyboardButton(text=text, callback_data=f"admin:report:{r['report_id']}")]
+        )
+    rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")])
+
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Открытые жалобы:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:report:"))
+async def admin_report_detail(callback: types.CallbackQuery, state: FSMContext) -> None:
+    report_id = int(callback.data.split(":")[2])
+    report = await get_report(report_id)
+    if report is None:
+        await callback.answer("Жалоба не найдена.")
+        return
+
+    text = (
+        f"<b>Жалоба #{report_id}</b>\n"
+        f"От: {report['reporter_id']}\n"
+        f"На: {report['reported_id']}\n"
+        f"Причина: {report['reason']}"
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👤 Анкета",
+                    callback_data=f"admin:viewuser:{report['reported_id']}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⛔ Забанить",
+                    callback_data=f"admin:banfromreport:{report_id}:{report['reported_id']}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✅ Отклонить",
+                    callback_data=f"admin:reportdismiss:{report_id}",
+                )
+            ],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:reports")],
+        ]
+    )
+    if callback.message is not None:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:banfromreport:"))
+async def admin_ban_from_report(callback: types.CallbackQuery, state: FSMContext) -> None:
+    parts = callback.data.split(":")
+    report_id = int(parts[2])
+    user_id = int(parts[3])
+    await ban_user(user_id)
+    await resolve_report(report_id, "resolved")
+    await add_admin_log(
+        callback.from_user.id,
+        "ban_from_report",
+        user_id,
+        f"report_id={report_id}",
+    )
+    await callback.answer("Пользователь забанен, жалоба закрыта.")
+    await admin_reports(callback, state)
+
+
+@router.callback_query(F.data.startswith("admin:reportdismiss:"))
+async def admin_dismiss_report(callback: types.CallbackQuery, state: FSMContext) -> None:
+    report_id = int(callback.data.split(":")[2])
+    await resolve_report(report_id, "dismissed")
+    await add_admin_log(
+        callback.from_user.id,
+        "dismiss_report",
+        details=f"report_id={report_id}",
+    )
+    await callback.answer("Жалоба отклонена.")
+    await admin_reports(callback, state)
