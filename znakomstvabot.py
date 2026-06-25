@@ -9,6 +9,7 @@ from aiohttp import web
 from config import BOT_TOKEN
 from database import init_db
 from handlers import admin, browse, common, likes, profile, registration, settings
+from middlewares import BanMiddleware
 from tunnel import start_tunnel, stop_tunnel
 from web_app import create_app
 
@@ -38,6 +39,8 @@ async def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher()
+    dp.message.outer_middleware(BanMiddleware())
+    dp.callback_query.outer_middleware(BanMiddleware())
     dp.include_routers(
         common.router,
         registration.router,

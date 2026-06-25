@@ -265,6 +265,7 @@ async def update_me(request: web.Request) -> web.Response:
 @routes.get("/api/feed")
 async def feed(request: web.Request) -> web.Response:
     user = await _active_user(request)
+    user_id = user["user_id"]
 
     candidates = await get_all_users()
     viewed_ids = await get_viewed_ids(user_id)
