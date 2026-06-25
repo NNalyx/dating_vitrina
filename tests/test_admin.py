@@ -214,3 +214,30 @@ class TestAdminUserLookup:
         await admin_user_lookup(msg, state)
         args, _ = msg.answer.await_args
         assert "Alice" in args[0]
+
+
+class TestAdminActions:
+    async def test_ban_button_bans_user(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "actions.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user, is_banned
+
+        await init_db()
+        await add_user(
+            user_id=400,
+            username="victim",
+            age=20,
+            name="Victim",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+
+        from handlers.admin import admin_ban_toggle
+
+        cb = _make_callback(8241460494, "admin:ban:400:1")
+        state = MagicMock()
+        await admin_ban_toggle(cb, state)
+        assert await is_banned(400) is True

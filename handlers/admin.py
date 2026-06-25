@@ -3,7 +3,14 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from database import get_user, get_user_by_username
+from database import (
+    add_admin_log,
+    ban_user,
+    delete_user,
+    get_user,
+    get_user_by_username,
+    unban_user,
+)
 from keyboards import admin_back_menu_keyboard, admin_menu_keyboard
 from services.admin import is_admin
 from services.profile import format_profile
@@ -97,3 +104,68 @@ async def _show_user_profile(message: types.Message, user: dict) -> None:
         ]
     )
     await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+
+async def _refresh_user_profile(callback: types.CallbackQuery, user_id: int) -> None:
+    user = await get_user(user_id)
+    if user is None:
+        if callback.message is not None:
+            await callback.message.edit_text(
+                "Пользователь не найден.",
+                reply_markup=admin_menu_keyboard(),
+            )
+        return
+
+    banned = bool(user.get("is_banned"))
+    text = format_profile(user, title="👤 Анкета пользователя")
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⛔ Забанить" if not banned else "✅ Разбанить",
+                    callback_data=f"admin:ban:{user_id}:{int(not banned)}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗑 Удалить анкету",
+                    callback_data=f"admin:delete:{user_id}",
+                )
+            ],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:users")],
+        ]
+    )
+    if callback.message is not None:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("admin:ban:"))
+async def admin_ban_toggle(callback: types.CallbackQuery, state: FSMContext) -> None:
+    parts = callback.data.split(":")
+    user_id = int(parts[2])
+    ban = int(parts[3])
+    if ban:
+        await ban_user(user_id)
+        action = "ban"
+        text = "Пользователь заблокирован."
+    else:
+        await unban_user(user_id)
+        action = "unban"
+        text = "Пользователь разблокирован."
+    await add_admin_log(callback.from_user.id, action, user_id)
+    await callback.answer(text)
+    await _refresh_user_profile(callback, user_id)
+
+
+@router.callback_query(F.data.startswith("admin:delete:"))
+async def admin_delete_user(callback: types.CallbackQuery, state: FSMContext) -> None:
+    user_id = int(callback.data.split(":")[2])
+    await delete_user(user_id)
+    await add_admin_log(callback.from_user.id, "delete_user", user_id)
+    await callback.answer("Анкета удалена.")
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Анкета удалена.",
+            reply_markup=admin_menu_keyboard(),
+        )
