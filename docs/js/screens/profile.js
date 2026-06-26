@@ -1,4 +1,5 @@
 import { renderInterestPicker } from "../components/interestPicker.js";
+import { withLoading } from "../components/loading.js";
 
 const GENDER_OPTIONS = [
     { value: "male", label: "Парень" },
@@ -21,7 +22,7 @@ const GOAL_OPTIONS = [
 export function renderProfile(container, api) {
     async function load() {
         try {
-            const user = await api.me();
+            const user = await withLoading(container, () => api.me());
             render(user);
         } catch (e) {
             container.innerHTML = `<div class="screen active"><p>Ошибка: ${e.message}</p></div>`;

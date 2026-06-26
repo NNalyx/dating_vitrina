@@ -1,4 +1,5 @@
 import { renderEditField } from "./editField.js";
+import { withLoading } from "../components/loading.js";
 
 const GENDER_OPTIONS = [
     { value: "male", label: "Парень" },
@@ -21,10 +22,9 @@ const GOAL_OPTIONS = [
 export function renderSettings(container, api) {
     async function load() {
         try {
-            const [settings, user] = await Promise.all([
-                api.getSettings(),
-                api.me(),
-            ]);
+            const [settings, user] = await withLoading(container, () =>
+                Promise.all([api.getSettings(), api.me()])
+            );
             render(settings, user);
         } catch (e) {
             container.innerHTML = `<div class="screen active"><p>Ошибка: ${e.message}</p></div>`;

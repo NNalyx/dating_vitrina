@@ -1,3 +1,5 @@
+import { withLoading } from "../components/loading.js";
+
 export function renderFeed(container, api, onMutual) {
     let current = null;
     let isLoading = false;
@@ -6,7 +8,7 @@ export function renderFeed(container, api, onMutual) {
         if (isLoading) return;
         isLoading = true;
         try {
-            const data = await api.feed();
+            const data = await withLoading(container, () => api.feed());
             current = data.done ? null : data;
             render();
         } catch (e) {

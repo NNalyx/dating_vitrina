@@ -240,6 +240,35 @@ input:focus, select:focus {
     flex-direction: column;
     overflow: hidden;
     padding-bottom: 80px;
+    position: relative;
+}
+
+.skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--surface);
+    z-index: 50;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.skeleton-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: translateX(-100%);
+    animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
 }
 
 .bottom-nav {

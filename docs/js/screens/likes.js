@@ -1,7 +1,9 @@
+import { withLoading } from "../components/loading.js";
+
 export function renderLikes(container, api) {
     async function load() {
         try {
-            const likes = await api.likes();
+            const likes = await withLoading(container, () => api.likes());
             render(likes);
         } catch (e) {
             container.innerHTML = `<div class="screen active likes-empty"><p>Ошибка: ${e.message}</p></div>`;
