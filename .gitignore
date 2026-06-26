@@ -16,5 +16,9 @@ ENV/
 dating_bot.db
 *.db
 
+# Secrets
+.env
+
 # Telegram
-config.py
+# config.py is tracked with BOT_TOKEN read from an environment variable.
+# Do not add real tokens here.

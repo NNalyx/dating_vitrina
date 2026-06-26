@@ -29,6 +29,12 @@ async def start_web(app: web.Application, host: str = "0.0.0.0", port: int = 808
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
+    if not BOT_TOKEN:
+        raise RuntimeError(
+            "BOT_TOKEN environment variable is not set. "
+            "Set it to your Telegram bot token before running the bot."
+        )
+
     await init_db()
 
     public_url = await start_tunnel()

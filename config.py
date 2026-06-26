@@ -1,6 +1,9 @@
 # config.py
 
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Do not change the real token
+import os
+
+# Set the BOT_TOKEN environment variable to your Telegram bot token.
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 DB_PATH = "dating_bot.db"
 OWNER_ID = 8241460494
 MIN_AGE = 16
