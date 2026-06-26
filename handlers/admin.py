@@ -7,14 +7,19 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
+from config import GENDER_OPTIONS, GOAL_OPTIONS, LOOKING_FOR_OPTIONS
 from database import (
     add_admin_log,
+    add_fake_user,
     add_interest,
     ban_user,
+    delete_fake_users,
     delete_user,
     get_admin_logs,
     get_admin_stats,
     get_all_users,
+    get_banned_users,
+    get_fake_users,
     get_interests_from_db,
     get_pending_reports,
     get_report,
@@ -27,9 +32,14 @@ from database import (
 )
 from keyboards import (
     admin_back_menu_keyboard,
+    admin_bans_keyboard,
+    admin_fakes_keyboard,
     admin_interest_category_keyboard,
     admin_interests_keyboard,
     admin_menu_keyboard,
+    fake_confirm_keyboard,
+    fake_options_keyboard,
+    fake_photo_keyboard,
 )
 from services.admin import is_admin
 from services.profile import format_profile
@@ -126,7 +136,9 @@ async def _show_user_profile(message: types.Message, user: dict) -> None:
 
 
 
-async def _refresh_user_profile(callback: types.CallbackQuery, user_id: int) -> None:
+async def _refresh_user_profile(
+    callback: types.CallbackQuery, user_id: int, *, back_callback: str = "admin:users"
+) -> None:
     user = await get_user(user_id)
     if user is None:
         if callback.message is not None:
@@ -152,7 +164,7 @@ async def _refresh_user_profile(callback: types.CallbackQuery, user_id: int) -> 
                     callback_data=f"admin:delete:{user_id}",
                 )
             ],
-            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:users")],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data=back_callback)],
         ]
     )
     if callback.message is not None:
@@ -291,6 +303,49 @@ async def admin_dismiss_report(callback: types.CallbackQuery, state: FSMContext)
     await callback.answer("Жалоба отклонена.")
     await admin_reports(callback, state)
 
+
+@router.callback_query(F.data.startswith("admin:viewuser:"))
+async def admin_view_reported_user(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    user_id = int(callback.data.split(":")[2])
+    user = await get_user(user_id)
+    if user is None:
+        await callback.answer("Анкета не найдена.")
+        return
+    await _refresh_user_profile(callback, user_id, back_callback="admin:reports")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:bans")
+async def admin_bans(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    banned = await get_banned_users(limit=20)
+    if not banned:
+        if callback.message is not None:
+            await callback.message.edit_text(
+                "Забаненных пользователей нет.",
+                reply_markup=admin_menu_keyboard(),
+            )
+        await callback.answer()
+        return
+
+    text = f"<b>🚫 Забаненные пользователи ({len(banned)})</b>\n\nНажми, чтобы разбанить:"
+    if callback.message is not None:
+        await callback.message.edit_text(
+            text,
+            reply_markup=admin_bans_keyboard(banned),
+            parse_mode="HTML",
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:unban:"))
+async def admin_unban_user(callback: types.CallbackQuery, state: FSMContext) -> None:
+    user_id = int(callback.data.split(":")[2])
+    await unban_user(user_id)
+    await add_admin_log(callback.from_user.id, "unban", user_id)
+    await callback.answer("Пользователь разбанен.")
+    await admin_bans(callback, state)
 
 
 @router.callback_query(F.data == "admin:stats")
@@ -529,3 +584,226 @@ async def admin_logs(callback: types.CallbackQuery, state: FSMContext) -> None:
             parse_mode="HTML",
         )
     await callback.answer()
+
+
+@router.callback_query(F.data == "admin:fakes")
+async def admin_fakes_menu(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    fake_users = await get_fake_users(limit=100)
+    text = (
+        f"<b>🎭 Фейковые анкеты</b>\n\n"
+        f"Количество: {len(fake_users)}\n\n"
+        f"Фейки нужны, чтобы лента не была пустой, пока в боте мало реальных пользователей."
+    )
+    if callback.message is not None:
+        await callback.message.edit_text(
+            text,
+            reply_markup=admin_fakes_keyboard(len(fake_users)),
+            parse_mode="HTML",
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:fakes:reset")
+async def admin_fakes_reset(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    count = await delete_fake_users()
+    await add_admin_log(
+        callback.from_user.id,
+        "reset_fake_users",
+        details=f"removed={count}",
+    )
+    await callback.answer(f"Удалено фейков: {count}")
+    await admin_fakes_menu(callback, state)
+
+
+@router.callback_query(F.data == "admin:fakes:add")
+async def admin_fake_add_start(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Введи имя для фейковой анкеты:",
+            reply_markup=admin_back_menu_keyboard(),
+        )
+    await state.set_state(AdminMenu.fake_name)
+    await callback.answer()
+
+
+@router.message(AdminMenu.fake_name)
+async def admin_fake_name(message: types.Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer("Имя не может быть пустым.")
+        return
+    await state.update_data(fake_name=name)
+    await message.answer(
+        "Введи возраст (число от 16 до 100):",
+        reply_markup=admin_back_menu_keyboard(),
+    )
+    await state.set_state(AdminMenu.fake_age)
+
+
+@router.message(AdminMenu.fake_age)
+async def admin_fake_age(message: types.Message, state: FSMContext) -> None:
+    text = (message.text or "").strip()
+    if not text.isdigit():
+        await message.answer("Нужно ввести число.")
+        return
+    age = int(text)
+    if not (16 <= age <= 100):
+        await message.answer("Возраст должен быть от 16 до 100.")
+        return
+    await state.update_data(fake_age=age)
+    await message.answer(
+        "Выбери пол:",
+        reply_markup=fake_options_keyboard(GENDER_OPTIONS, "gender"),
+    )
+    await state.set_state(AdminMenu.fake_gender)
+
+
+@router.callback_query(F.data.startswith("fakeopt:gender:"))
+async def admin_fake_gender(callback: types.CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":", 2)[2]
+    await state.update_data(fake_gender=value)
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Кого ищет фейк?",
+            reply_markup=fake_options_keyboard(LOOKING_FOR_OPTIONS, "looking_for"),
+        )
+    await state.set_state(AdminMenu.fake_looking_for)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("fakeopt:looking_for:"))
+async def admin_fake_looking_for(callback: types.CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":", 2)[2]
+    await state.update_data(fake_looking_for=value)
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Выбери цель знакомства:",
+            reply_markup=fake_options_keyboard(GOAL_OPTIONS, "goal"),
+        )
+    await state.set_state(AdminMenu.fake_goal)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("fakeopt:goal:"))
+async def admin_fake_goal(callback: types.CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":", 2)[2]
+    await state.update_data(fake_goal=value)
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Введи город (или отправь '-' без кавычек, чтобы пропустить):",
+            reply_markup=admin_back_menu_keyboard(),
+        )
+    await state.set_state(AdminMenu.fake_city)
+    await callback.answer()
+
+
+@router.message(AdminMenu.fake_city)
+async def admin_fake_city(message: types.Message, state: FSMContext) -> None:
+    city = (message.text or "").strip()
+    if city == "-":
+        city = ""
+    await state.update_data(fake_city=city or None)
+    await message.answer(
+        "Введи увлечения через запятую:",
+        reply_markup=admin_back_menu_keyboard(),
+    )
+    await state.set_state(AdminMenu.fake_interests)
+
+
+@router.message(AdminMenu.fake_interests)
+async def admin_fake_interests(message: types.Message, state: FSMContext) -> None:
+    text = (message.text or "").strip()
+    interests = [i.strip() for i in text.split(",") if i.strip()]
+    if not interests:
+        await message.answer("Нужно ввести хотя бы одно увлечение.")
+        return
+    await state.update_data(fake_interests=interests)
+    await message.answer(
+        "Отправь фото для анкеты или нажми 'Пропустить фото':",
+        reply_markup=fake_photo_keyboard(),
+    )
+    await state.set_state(AdminMenu.fake_photo)
+
+
+@router.message(AdminMenu.fake_photo)
+async def admin_fake_photo(message: types.Message, state: FSMContext) -> None:
+    if not message.photo:
+        await message.answer("Отправь фото или нажми кнопку пропуска.")
+        return
+    file_id = message.photo[-1].file_id
+    await state.update_data(fake_photo_file_id=file_id)
+    await _send_fake_preview(message, state)
+
+
+@router.callback_query(F.data == "fakeopt:photo:skip")
+async def admin_fake_photo_skip(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(fake_photo_file_id=None)
+    if callback.message is not None:
+        await callback.message.edit_text("Фото пропущено.")
+    await _send_fake_preview(callback.message, state)
+    await callback.answer()
+
+
+async def _send_fake_preview(message: types.Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    preview_text = _format_fake_preview(data)
+    await message.answer(
+        preview_text,
+        reply_markup=fake_confirm_keyboard(),
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminMenu.fake_confirm)
+
+
+def _format_fake_preview(data: dict) -> str:
+    from services.profile import _label
+
+    lines = [
+        "<b>🎭 Предпросмотр фейковой анкеты</b>",
+        "",
+        f"<b>Имя:</b> {data['fake_name']}",
+        f"<b>Возраст:</b> {data['fake_age']}",
+        f"<b>Пол:</b> {_label(data['fake_gender'])}",
+        f"<b>Ищу:</b> {_label(data['fake_looking_for'])}",
+        f"<b>Цель:</b> {_label(data['fake_goal'])}",
+        f"<b>Увлечения:</b> {', '.join(data['fake_interests'])}",
+    ]
+    city = data.get("fake_city")
+    if city:
+        lines.append(f"<b>📍 Город:</b> {city}")
+    photo = data.get("fake_photo_file_id")
+    lines.append(f"<b>Фото:</b> {'есть' if photo else 'нет'}")
+    return "\n".join(lines)
+
+
+@router.callback_query(F.data == "fakeopt:publish")
+async def admin_fake_publish(callback: types.CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    required = ("fake_name", "fake_age", "fake_gender", "fake_looking_for", "fake_goal", "fake_interests")
+    if not all(k in data for k in required):
+        await callback.answer("Не хватает данных. Начни заново.")
+        await admin_fakes_menu(callback, state)
+        return
+
+    user_id = await add_fake_user(
+        name=data["fake_name"],
+        age=data["fake_age"],
+        gender=data["fake_gender"],
+        looking_for=data["fake_looking_for"],
+        goal=data["fake_goal"],
+        interests=data["fake_interests"],
+        city=data.get("fake_city"),
+        photo_file_id=data.get("fake_photo_file_id"),
+    )
+    await add_admin_log(
+        callback.from_user.id,
+        "add_fake_user",
+        target_id=user_id,
+        details=data["fake_name"],
+    )
+    await state.clear()
+    await callback.answer("Фейковая анкета опубликована.")
+    await admin_fakes_menu(callback, state)

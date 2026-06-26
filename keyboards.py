@@ -205,7 +205,8 @@ def admin_menu_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🚫 Баны", callback_data="admin:bans"),
             ],
             [
-                InlineKeyboardButton(text="📋 Логи админа", callback_data="admin:logs"),
+                InlineKeyboardButton(text="🎭 Фейки", callback_data="admin:fakes"),
+                InlineKeyboardButton(text="📋 Логи", callback_data="admin:logs"),
             ],
         ]
     )
@@ -241,3 +242,52 @@ def admin_interest_category_keyboard(cat_key: str, items: list[str]) -> InlineKe
     rows.append([InlineKeyboardButton(text="🗑 Удалить категорию", callback_data=f"admin:intcatdel:{cat_key}")])
     rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data="admin:interests")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_bans_keyboard(banned_users: list[dict]) -> InlineKeyboardMarkup:
+    rows = []
+    for user in banned_users:
+        text = f"{user['name']}, {user['age']} (id:{user['user_id']})"
+        rows.append(
+            [InlineKeyboardButton(text=text, callback_data=f"admin:unban:{user['user_id']}")]
+        )
+    rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_fakes_keyboard(fake_count: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Добавить фейк", callback_data="admin:fakes:add")],
+            [InlineKeyboardButton(text=f"🗑 Сбросить все фейки ({fake_count})", callback_data="admin:fakes:reset")],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")],
+        ]
+    )
+
+
+def fake_options_keyboard(options: list[tuple[str, str]], field: str) -> InlineKeyboardMarkup:
+    """Build a keyboard for choosing a fake profile option (gender/looking_for/goal)."""
+    rows = []
+    for key, label in options:
+        rows.append(
+            [InlineKeyboardButton(text=label, callback_data=f"fakeopt:{field}:{key}")]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def fake_photo_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустить фото", callback_data="fakeopt:photo:skip")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin:fakes")],
+        ]
+    )
+
+
+def fake_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Опубликовать", callback_data="fakeopt:publish")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="admin:fakes")],
+        ]
+    )

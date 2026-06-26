@@ -27,16 +27,18 @@ async def init_db() -> None:
                 filter_only_my_city INTEGER DEFAULT 0,
                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
                 is_banned INTEGER NOT NULL DEFAULT 0,
+                is_fake INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
-        try:
-            await db.execute(
-                "ALTER TABLE users ADD COLUMN is_banned INTEGER NOT NULL DEFAULT 0"
-            )
-        except sqlite3.OperationalError:
-            pass
+        for column in ("is_banned", "is_fake"):
+            try:
+                await db.execute(
+                    f"ALTER TABLE users ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
 
         await db.execute(
             """
@@ -120,14 +122,15 @@ async def add_user(
     interests: list[str],
     photo_file_id: str | None = None,
     city: str | None = None,
+    is_fake: bool = False,
 ) -> None:
     """Insert a newly registered user into the database."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
             INSERT INTO users
-            (user_id, username, age, name, gender, looking_for, goal, interests, photo_file_id, city, notifications_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            (user_id, username, age, name, gender, looking_for, goal, interests, photo_file_id, city, notifications_enabled, is_fake)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """,
             (
                 user_id,
@@ -140,6 +143,7 @@ async def add_user(
                 ",".join(sorted(interests)),
                 photo_file_id,
                 city,
+                1 if is_fake else 0,
             ),
         )
         await db.commit()
@@ -549,6 +553,14 @@ async def get_admin_stats() -> dict:
             "SELECT COUNT(*) FROM reports WHERE status = 'pending'"
         ) as cursor:
             pending_reports = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE is_banned = 1"
+        ) as cursor:
+            banned_users = (await cursor.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE is_fake = 1"
+        ) as cursor:
+            fake_users = (await cursor.fetchone())[0]
     return {
         "total_users": total_users,
         "new_today": new_today,
@@ -558,4 +570,89 @@ async def get_admin_stats() -> dict:
         "total_views": total_views,
         "active_users": active_users,
         "pending_reports": pending_reports,
+        "banned_users": banned_users,
+        "fake_users": fake_users,
     }
+
+
+async def get_banned_users(limit: int = 20) -> list[dict]:
+    """Return recently banned users."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE is_banned = 1 ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def get_fake_users(limit: int = 100) -> list[dict]:
+    """Return all fake profiles."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE is_fake = 1 ORDER BY user_id LIMIT ?",
+            (limit,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def delete_fake_users() -> int:
+    """Delete all fake profiles and return count of removed rows."""
+    fake_users = await get_fake_users(limit=10000)
+    async with aiosqlite.connect(DB_PATH) as db:
+        for user in fake_users:
+            uid = user["user_id"]
+            await db.execute("DELETE FROM users WHERE user_id = ?", (uid,))
+            await db.execute(
+                "DELETE FROM likes WHERE from_user_id = ? OR to_user_id = ?",
+                (uid, uid),
+            )
+            await db.execute(
+                "DELETE FROM views WHERE viewer_id = ? OR viewed_id = ?",
+                (uid, uid),
+            )
+        await db.commit()
+    return len(fake_users)
+
+
+async def get_next_fake_user_id() -> int:
+    """Return the next negative user_id for a fake profile."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT MIN(user_id) FROM users WHERE user_id < 0"
+        ) as cursor:
+            row = await cursor.fetchone()
+            min_id = row[0] if row and row[0] is not None else 0
+    return min(min_id - 1, -1)
+
+
+async def add_fake_user(
+    *,
+    name: str,
+    age: int,
+    gender: str,
+    looking_for: str,
+    goal: str,
+    interests: list[str],
+    city: str | None = None,
+    photo_file_id: str | None = None,
+) -> int:
+    """Create a fake profile and return its generated user_id."""
+    user_id = await get_next_fake_user_id()
+    await add_user(
+        user_id=user_id,
+        username=None,
+        age=age,
+        name=name,
+        gender=gender,
+        looking_for=looking_for,
+        goal=goal,
+        interests=interests,
+        photo_file_id=photo_file_id,
+        city=city,
+        is_fake=True,
+    )
+    return user_id

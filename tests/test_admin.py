@@ -406,3 +406,158 @@ class TestAdminLogs:
         await admin_logs(cb, state)
         args, _ = cb.message.edit_text.await_args
         assert "ban" in args[0]
+
+
+class TestAdminBans:
+    async def test_bans_button_lists_banned_user(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "bans.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user, ban_user
+
+        await init_db()
+        await add_user(
+            user_id=700,
+            username="banned",
+            age=25,
+            name="Banned",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        await ban_user(700)
+
+        from handlers.admin import admin_bans
+
+        cb = _make_callback(8241460494, "admin:bans")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_bans(cb, state)
+        args, kwargs = cb.message.edit_text.await_args
+        assert "Забаненные пользователи" in args[0]
+        assert "Banned" in kwargs["reply_markup"].inline_keyboard[0][0].text
+
+    async def test_unban_button_unbans_user(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "unban.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user, ban_user, is_banned
+
+        await init_db()
+        await add_user(
+            user_id=701,
+            username="banned",
+            age=25,
+            name="Banned",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме"],
+        )
+        await ban_user(701)
+
+        from handlers.admin import admin_unban_user
+
+        cb = _make_callback(8241460494, "admin:unban:701")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_unban_user(cb, state)
+        assert await is_banned(701) is False
+
+
+class TestAdminReportProfileView:
+    async def test_view_user_button_in_report_shows_profile(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "report_view.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user
+
+        await init_db()
+        await add_user(
+            user_id=800,
+            username="reported",
+            age=22,
+            name="Reported",
+            gender="female",
+            looking_for="male",
+            goal="relationship",
+            interests=["Кино"],
+        )
+
+        from handlers.admin import admin_view_reported_user
+
+        cb = _make_callback(8241460494, "admin:viewuser:800")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_view_reported_user(cb, state)
+        args, _ = cb.message.edit_text.await_args
+        assert "Reported" in args[0]
+
+
+class TestFakeUsers:
+    async def test_add_fake_user_creates_negative_id(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "fake.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_fake_user, get_fake_users
+
+        await init_db()
+        user_id = await add_fake_user(
+            name="Fake",
+            age=20,
+            gender="female",
+            looking_for="male",
+            goal="flirt",
+            interests=["Аниме"],
+        )
+        assert user_id < 0
+        fakes = await get_fake_users()
+        assert len(fakes) == 1
+        assert fakes[0]["name"] == "Fake"
+
+    async def test_reset_fake_users_removes_them(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "fake_reset.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_fake_user, delete_fake_users, get_fake_users
+
+        await init_db()
+        await add_fake_user(
+            name="Fake",
+            age=20,
+            gender="female",
+            looking_for="male",
+            goal="flirt",
+            interests=["Аниме"],
+        )
+        removed = await delete_fake_users()
+        assert removed == 1
+        assert await get_fake_users() == []
+
+
+class TestAdminFakes:
+    async def test_fakes_menu_shows_count(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "admin_fakes.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_fake_user
+
+        await init_db()
+        await add_fake_user(
+            name="Fake",
+            age=20,
+            gender="female",
+            looking_for="male",
+            goal="flirt",
+            interests=["Аниме"],
+        )
+
+        from handlers.admin import admin_fakes_menu
+
+        cb = _make_callback(8241460494, "admin:fakes")
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_fakes_menu(cb, state)
+        args, _ = cb.message.edit_text.await_args
+        assert "Количество: 1" in args[0]
