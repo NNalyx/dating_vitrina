@@ -2,7 +2,15 @@
 
 import os
 
-# Set the BOT_TOKEN environment variable to your Telegram bot token.
+from dotenv import load_dotenv
+
+# Load .env from the same directory as this config file.
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(__file__), ".env"),
+    override=True,
+)
+
+# Telegram bot token is read from the BOT_TOKEN environment variable or a .env file.
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 DB_PATH = "dating_bot.db"
 OWNER_ID = 8241460494

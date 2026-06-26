@@ -26,6 +26,7 @@ Pygments==2.20.0
 pytest==9.1.1
 pytest-aiohttp==1.1.1
 pytest-asyncio==1.4.0
+python-dotenv==1.2.2
 telegram-webapp-auth==3.2.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
