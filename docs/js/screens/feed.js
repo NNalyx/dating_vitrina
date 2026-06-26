@@ -40,6 +40,7 @@ export function renderFeed(container, api, onMutual) {
                 <div class="card" id="card">
                     ${photoHtml}
                     <div class="card-gradient"></div>
+                    <button class="action-report" id="reportBtn" aria-label="Пожаловаться">🚩</button>
                     <div class="card-info">
                         <div class="card-name">${current.name}, ${current.age}</div>
                         <div class="card-meta">${current.city || ""}${current.city ? " · " : ""}${current.compatibility}% ❤️</div>
@@ -51,15 +52,13 @@ export function renderFeed(container, api, onMutual) {
                     <button class="secondary action-skip" id="skipBtn">✕</button>
                     <button class="action-like" id="likeBtn">♥</button>
                 </div>
-                <div class="feed-report">
-                    <button class="action-report" id="reportBtn">🚩 Пожаловаться</button>
-                </div>
             </div>
         `;
 
         document.getElementById("skipBtn").addEventListener("click", () => act("skip"));
         document.getElementById("likeBtn").addEventListener("click", () => act("like"));
-        document.getElementById("reportBtn").addEventListener("click", async () => {
+        document.getElementById("reportBtn").addEventListener("click", async (e) => {
+            e.stopPropagation();
             if (!current) return;
             const reason = window.prompt("Причина жалобы:");
             if (!reason) return;
