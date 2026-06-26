@@ -12,6 +12,7 @@ from database import (
     add_report,
     add_user,
     add_view,
+    clear_views,
     get_all_users,
     get_interests_from_db,
     get_notifications_enabled,
@@ -390,6 +391,13 @@ async def settings_put(request: web.Request) -> web.Response:
         filter_only_my_city=only_my_city,
         notifications_enabled=notifications_enabled,
     )
+    return web.json_response({"status": "ok"})
+
+
+@routes.post("/api/reset-views")
+async def reset_views_endpoint(request: web.Request) -> web.Response:
+    user = await _active_user(request)
+    await clear_views(user["user_id"])
     return web.json_response({"status": "ok"})
 
 

@@ -294,6 +294,13 @@ async def get_viewed_ids(viewer_id: int) -> set[int]:
             return {row[0] for row in rows}
 
 
+async def clear_views(viewer_id: int) -> None:
+    """Remove all viewed records for a given viewer."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM views WHERE viewer_id = ?", (viewer_id,))
+        await db.commit()
+
+
 async def get_notifications_enabled(user_id: int) -> bool:
     """Return True if the user wants incoming-like notifications."""
     async with aiosqlite.connect(DB_PATH) as db:

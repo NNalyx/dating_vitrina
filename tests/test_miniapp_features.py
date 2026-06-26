@@ -346,3 +346,45 @@ async def test_mutual_like_sends_match_notification(client_with_bot, monkeypatch
     assert bot.send_message.await_count >= 2
     texts = [call.kwargs.get("text", "") for call in bot.send_message.await_args_list]
     assert any("Взаимный лайк" in text for text in texts)
+
+
+async def test_reset_views_clears_viewed(client, monkeypatch):
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    await _register(
+        client,
+        monkeypatch,
+        1,
+        {
+            "age": 25,
+            "name": "Анна",
+            "gender": "female",
+            "looking_for": "male",
+            "goal": "relationship",
+            "interests": ["Музыка", "Спорт", "Кино"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    await _register(
+        client,
+        monkeypatch,
+        2,
+        {
+            "age": 26,
+            "name": "Пётр",
+            "gender": "male",
+            "looking_for": "female",
+            "goal": "relationship",
+            "interests": ["Музыка", "Кино", "Игры"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    from database import add_view, get_viewed_ids
+
+    await add_view(1, 2)
+    assert await get_viewed_ids(1) == {2}
+
+    resp = await client.post("/api/reset-views", headers=await _header(1))
+    assert resp.status == 200
+    assert await get_viewed_ids(1) == set()
