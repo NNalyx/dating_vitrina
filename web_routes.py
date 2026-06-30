@@ -27,7 +27,7 @@ from database import (
 )
 from keyboards import mini_app_button_keyboard
 from services.city_validation import is_valid_city, normalize_city
-from services.init_data import validate_init_data
+from services.init_data import get_init_data_user, validate_init_data
 from services.matching import filter_candidates, score_candidates
 from services.moderation import is_clean_city, is_clean_name
 from services.profile import format_profile
@@ -57,18 +57,20 @@ async def _active_user(request: web.Request) -> dict:
 @routes.post("/api/auth")
 async def auth(request: web.Request) -> web.Response:
     body = await request.json()
-    user_id = validate_init_data(body.get("initData", ""))
-    if user_id is None:
+    user = get_init_data_user(body.get("initData", ""))
+    if user is None:
         return web.json_response({"error": "Invalid initData"}, status=401)
-    exists = await user_exists(user_id)
-    return web.json_response({"user_id": user_id, "is_registered": exists})
+    exists = await user_exists(user.id)
+    if exists:
+        await update_user(user.id, username=user.username)
+    return web.json_response({"user_id": user.id, "is_registered": exists})
 
 
 @routes.post("/api/register")
 async def register(request: web.Request) -> web.Response:
     body = await request.json()
-    user_id = validate_init_data(body.get("initData", ""))
-    if user_id is None:
+    user = get_init_data_user(body.get("initData", ""))
+    if user is None:
         return web.json_response({"error": "Invalid initData"}, status=401)
 
     name = str(body.get("name", "")).strip()
@@ -86,8 +88,8 @@ async def register(request: web.Request) -> web.Response:
 
     try:
         await add_user(
-            user_id=user_id,
-            username=None,
+            user_id=user.id,
+            username=user.username,
             age=int(body["age"]),
             name=name,
             gender=str(body["gender"]),
@@ -106,13 +108,13 @@ async def register(request: web.Request) -> web.Response:
             keyboard = mini_app_button_keyboard()
             if keyboard:
                 await bot.send_message(
-                    chat_id=user_id,
+                    chat_id=user.id,
                     text="🎉 Регистрация успешно пройдена! Заходи в приложение",
                     reply_markup=keyboard,
                 )
             else:
                 await bot.send_message(
-                    chat_id=user_id,
+                    chat_id=user.id,
                     text="🎉 Регистрация успешно пройдена! Приложение скоро будет доступно.",
                 )
         except Exception:

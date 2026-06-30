@@ -216,6 +216,35 @@ class TestAdminUserLookup:
         args, _ = msg.answer.await_args
         assert "Alice" in args[0]
 
+    async def test_lookup_by_username(self, tmp_path, monkeypatch):
+        path = str(tmp_path / "lookup_username.db")
+        monkeypatch.setattr("config.DB_PATH", path)
+        monkeypatch.setattr("database.DB_PATH", path)
+        from database import init_db, add_user
+
+        await init_db()
+        await add_user(
+            user_id=301,
+            username="bob",
+            age=25,
+            name="Bob",
+            gender="male",
+            looking_for="female",
+            goal="relationship",
+            interests=["Аниме", "Кино"],
+            city="Москва",
+        )
+
+        from handlers.admin import admin_user_lookup
+
+        msg = _make_message(8241460494)
+        msg.text = "@bob"
+        state = MagicMock()
+        state.clear = AsyncMock()
+        await admin_user_lookup(msg, state)
+        args, _ = msg.answer.await_args
+        assert "Bob" in args[0]
+
 
 class TestAdminActions:
     async def test_ban_button_bans_user(self, tmp_path, monkeypatch):

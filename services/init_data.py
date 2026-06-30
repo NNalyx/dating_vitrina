@@ -1,4 +1,5 @@
 from telegram_webapp_auth.auth import TelegramAuthenticator, generate_secret_key
+from telegram_webapp_auth.data import WebAppUser
 from telegram_webapp_auth.errors import InvalidInitDataError
 
 from config import BOT_TOKEN
@@ -31,27 +32,31 @@ def validate_init_data(init_data: str) -> int | None:
     Supports both legacy HMAC-SHA256 ``hash`` signatures (signed with the bot
     token) and newer Ed25519 ``signature`` signatures (signed by Telegram).
     """
+    user = get_init_data_user(init_data)
+    if user is None:
+        return None
+    return int(user.id)
+
+
+def get_init_data_user(init_data: str) -> WebAppUser | None:
+    """Validate initData and return the Telegram user object, or None."""
     if not init_data:
         return None
 
     authenticator = _authenticator()
 
-    # Fast path: legacy HMAC-SHA256 hash signed with the bot token.
     try:
         web_app_data = authenticator.validate(init_data)
-        if web_app_data.user is not None:
-            return int(web_app_data.user.id)
+        return web_app_data.user
     except InvalidInitDataError:
         pass
 
-    # Fallback: Ed25519 signature signed by Telegram (no bot token required).
     if _has_signature(init_data):
         bot_id = _bot_id()
         if bot_id is not None:
             try:
                 web_app_data = authenticator.validate_third_party(init_data, bot_id)
-                if web_app_data.user is not None:
-                    return int(web_app_data.user.id)
+                return web_app_data.user
             except InvalidInitDataError:
                 pass
 
