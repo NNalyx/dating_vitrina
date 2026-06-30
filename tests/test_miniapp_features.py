@@ -1,3 +1,4 @@
+import aiohttp
 import pytest
 from unittest.mock import AsyncMock
 
@@ -388,3 +389,29 @@ async def test_reset_views_clears_viewed(client, monkeypatch):
     resp = await client.post("/api/reset-views", headers=await _header(1))
     assert resp.status == 200
     assert await get_viewed_ids(1) == set()
+
+
+async def test_upload_photo_rejects_oversized(client, monkeypatch):
+    monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    await _register(
+        client,
+        monkeypatch,
+        1,
+        {
+            "age": 25,
+            "name": "Анна",
+            "gender": "female",
+            "looking_for": "male",
+            "goal": "relationship",
+            "interests": ["Музыка", "Спорт", "Кино"],
+            "city": "Москва",
+            "photo_file_id": None,
+        },
+    )
+    headers = await _header(1)
+    data = aiohttp.FormData()
+    data.add_field("photo", b"x" * (3 * 1024 * 1024 + 1), content_type="image/jpeg")
+    resp = await client.post("/api/upload-photo", headers=headers, data=data)
+    assert resp.status == 400
+    body = await resp.json()
+    assert body["error"] == "File too large"

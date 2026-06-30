@@ -35,7 +35,7 @@ from services.profile import format_profile
 routes = web.RouteTableDef()
 
 ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_PHOTO_SIZE = 3 * 1024 * 1024  # 3 MB
 
 
 def _current_user_id(request: web.Request) -> int | None:

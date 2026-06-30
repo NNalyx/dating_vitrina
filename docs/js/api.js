@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "./config.js";
+import { compressImage } from "./utils/image.js";
 
 const initData = window.Telegram?.WebApp?.initData || "";
 const BASE_URL = API_BASE_URL || window.location.origin || "";
@@ -44,9 +45,10 @@ export const api = {
     getInterests: () => request("GET", "/api/interests"),
     me: () => request("GET", "/api/me"),
     updateMe: (data) => request("PUT", "/api/me", data),
-    uploadPhoto: (file) => {
+    uploadPhoto: async (file) => {
+        const compressed = await compressImage(file, { maxDimension: 1280, quality: 0.85 });
         const formData = new FormData();
-        formData.append("photo", file);
+        formData.append("photo", compressed, file.name);
         return uploadRequest("/api/upload-photo", formData);
     },
     photoUrl: (fileId) => `${BASE_URL}/api/photo/${fileId}`,
