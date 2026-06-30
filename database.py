@@ -25,6 +25,7 @@ async def init_db() -> None:
                 filter_min_age INTEGER DEFAULT 16,
                 filter_max_age INTEGER DEFAULT 100,
                 filter_only_my_city INTEGER DEFAULT 0,
+                filter_interests INTEGER DEFAULT 0,
                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
                 is_banned INTEGER NOT NULL DEFAULT 0,
                 is_fake INTEGER NOT NULL DEFAULT 0,
@@ -32,7 +33,7 @@ async def init_db() -> None:
             )
             """
         )
-        for column in ("is_banned", "is_fake"):
+        for column in ("is_banned", "is_fake", "filter_interests"):
             try:
                 await db.execute(
                     f"ALTER TABLE users ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"
@@ -175,6 +176,7 @@ async def update_user(
     filter_min_age: int | None = None,
     filter_max_age: int | None = None,
     filter_only_my_city: bool | None = None,
+    filter_interests: bool | None = None,
 ) -> None:
     """Update one or more user fields."""
     fields = []
@@ -215,6 +217,9 @@ async def update_user(
     if filter_only_my_city is not None:
         fields.append("filter_only_my_city = ?")
         values.append(1 if filter_only_my_city else 0)
+    if filter_interests is not None:
+        fields.append("filter_interests = ?")
+        values.append(1 if filter_interests else 0)
 
     if not fields:
         return
@@ -273,6 +278,30 @@ async def get_like_stats(user_id: int) -> tuple[int, int]:
         ) as cursor:
             received = (await cursor.fetchone())[0]
         return sent, received
+
+
+async def get_matches(user_id: int) -> list[dict]:
+    """Return users with mutual likes."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT u.* FROM users u
+            WHERE u.user_id != ?
+              AND EXISTS (
+                  SELECT 1 FROM likes l1
+                  WHERE l1.from_user_id = ? AND l1.to_user_id = u.user_id
+              )
+              AND EXISTS (
+                  SELECT 1 FROM likes l2
+                  WHERE l2.from_user_id = u.user_id AND l2.to_user_id = ?
+              )
+            ORDER BY u.name
+            """,
+            (user_id, user_id, user_id),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
 
 
 async def add_view(viewer_id: int, viewed_id: int) -> None:
@@ -346,11 +375,12 @@ async def get_user_filters(user_id: int) -> dict:
     """Return the user's feed filters as a dict with defaults."""
     user = await get_user(user_id)
     if not user:
-        return {"min_age": 16, "max_age": 100, "only_my_city": False}
+        return {"min_age": 16, "max_age": 100, "only_my_city": False, "filter_interests": False}
     return {
         "min_age": user.get("filter_min_age", 16),
         "max_age": user.get("filter_max_age", 100),
         "only_my_city": bool(user.get("filter_only_my_city", 0)),
+        "filter_interests": bool(user.get("filter_interests", 0)),
     }
 
 

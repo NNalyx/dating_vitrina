@@ -1,12 +1,18 @@
+import base64
+import hashlib
+import hmac
 import io
+import json
 import os
+import secrets
 import tempfile
+import time
 
 from aiohttp import web
 from aiogram import Bot
 from aiogram.types import FSInputFile
 
-from config import INTEREST_CATEGORIES, MAX_AGE, MIN_AGE
+from config import BOT_TOKEN, INTEREST_CATEGORIES, MAX_AGE, MIN_AGE, PHOTOS_DIR
 from database import (
     add_like,
     add_report,
@@ -15,6 +21,7 @@ from database import (
     clear_views,
     get_all_users,
     get_interests_from_db,
+    get_matches,
     get_notifications_enabled,
     get_user,
     get_user_filters,
@@ -36,6 +43,42 @@ routes = web.RouteTableDef()
 
 ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_PHOTO_SIZE = 3 * 1024 * 1024  # 3 MB
+CAPTCHA_TTL_SECONDS = 300
+
+
+def _make_captcha_token(answer: str) -> str:
+    payload = {"a": str(answer).lower().strip(), "e": int(time.time()) + CAPTCHA_TTL_SECONDS}
+    data = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
+    signature = hmac.new(BOT_TOKEN.encode(), data.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{data}.{signature}"
+
+
+def _verify_captcha_token(token: str, answer: str) -> bool:
+    try:
+        data, signature = token.split(".", 1)
+        expected = hmac.new(BOT_TOKEN.encode(), data.encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(expected, signature):
+            return False
+        payload = json.loads(base64.urlsafe_b64decode(data + "==").decode())
+        if int(time.time()) > payload["e"]:
+            return False
+        return str(answer).lower().strip() == payload["a"]
+    except Exception:
+        return False
+
+
+def _generate_captcha() -> tuple[str, str]:
+    a = secrets.randbelow(9) + 1
+    b = secrets.randbelow(9) + 1
+    if secrets.choice([True, False]):
+        question = f"{a} + {b}"
+        answer = str(a + b)
+    else:
+        if a < b:
+            a, b = b, a
+        question = f"{a} - {b}"
+        answer = str(a - b)
+    return question, answer
 
 
 def _current_user_id(request: web.Request) -> int | None:
@@ -66,12 +109,24 @@ async def auth(request: web.Request) -> web.Response:
     return web.json_response({"user_id": user.id, "is_registered": exists})
 
 
+@routes.get("/api/captcha")
+async def captcha_endpoint(request: web.Request) -> web.Response:
+    question, answer = _generate_captcha()
+    token = _make_captcha_token(answer)
+    return web.json_response({"question": question, "token": token})
+
+
 @routes.post("/api/register")
 async def register(request: web.Request) -> web.Response:
     body = await request.json()
     user = get_init_data_user(body.get("initData", ""))
     if user is None:
         return web.json_response({"error": "Invalid initData"}, status=401)
+
+    captcha_token = str(body.get("captcha_token", ""))
+    captcha_answer = str(body.get("captcha_answer", ""))
+    if not captcha_token or not _verify_captcha_token(captcha_token, captcha_answer):
+        return web.json_response({"error": "Invalid captcha"}, status=400)
 
     name = str(body.get("name", "")).strip()
     city = str(body.get("city", "")).strip()
@@ -360,6 +415,14 @@ async def skip_like_endpoint(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+@routes.get("/api/matches")
+async def matches_endpoint(request: web.Request) -> web.Response:
+    user = await _active_user(request)
+    matches = await get_matches(user["user_id"])
+    scored = score_candidates(user, matches)
+    return web.json_response([{**candidate, "compatibility": score} for candidate, score in scored])
+
+
 @routes.get("/api/settings")
 async def settings_get(request: web.Request) -> web.Response:
     user = await _active_user(request)
@@ -379,6 +442,7 @@ async def settings_put(request: web.Request) -> web.Response:
     min_age = int(body.get("min_age", MIN_AGE))
     max_age = int(body.get("max_age", MAX_AGE))
     only_my_city = bool(body.get("only_my_city", False))
+    filter_interests = bool(body.get("filter_interests", False))
     notifications_enabled = bool(body.get("notifications_enabled", True))
 
     min_age = max(MIN_AGE, min(MAX_AGE, min_age))
@@ -391,6 +455,7 @@ async def settings_put(request: web.Request) -> web.Response:
         filter_min_age=min_age,
         filter_max_age=max_age,
         filter_only_my_city=only_my_city,
+        filter_interests=filter_interests,
         notifications_enabled=notifications_enabled,
     )
     return web.json_response({"status": "ok"})
@@ -406,6 +471,13 @@ async def reset_views_endpoint(request: web.Request) -> web.Response:
 @routes.get("/api/photo/{file_id}")
 async def get_photo(request: web.Request) -> web.Response:
     file_id = request.match_info["file_id"]
+    cache_name = hashlib.sha256(file_id.encode()).hexdigest() + ".jpg"
+    cache_path = os.path.join(PHOTOS_DIR, cache_name)
+
+    if os.path.exists(cache_path):
+        with open(cache_path, "rb") as f:
+            return web.Response(body=f.read(), content_type="image/jpeg")
+
     bot: Bot | None = request.app.get("bot")
     if bot is None:
         return web.json_response({"error": "Bot not configured"}, status=500)
@@ -414,10 +486,14 @@ async def get_photo(request: web.Request) -> web.Response:
     if file is None:
         return web.json_response({"error": "Photo not found"}, status=404)
 
+    os.makedirs(PHOTOS_DIR, exist_ok=True)
     buf = io.BytesIO()
     await bot.download(file, destination=buf)
     buf.seek(0)
-    return web.Response(body=buf.read(), content_type="image/jpeg")
+    data = buf.read()
+    with open(cache_path, "wb") as f:
+        f.write(data)
+    return web.Response(body=data, content_type="image/jpeg")
 
 
 def _contact_markup(user: dict) -> dict | None:

@@ -40,7 +40,6 @@ async function uploadRequest(path, formData) {
 
 export const api = {
     auth: () => request("POST", "/api/auth", { initData }),
-    register: (profile) => request("POST", "/api/register", { initData, ...profile }),
     validateCity: (city) => request("POST", "/api/validate-city", { city }),
     getInterests: () => request("GET", "/api/interests"),
     me: () => request("GET", "/api/me"),
@@ -52,12 +51,15 @@ export const api = {
         return uploadRequest("/api/upload-photo", formData);
     },
     photoUrl: (fileId) => `${BASE_URL}/api/photo/${fileId}`,
+    getCaptcha: () => request("GET", "/api/captcha"),
+    register: (profile, captcha) => request("POST", "/api/register", { initData, ...profile, ...captcha }),
     feed: () => request("GET", "/api/feed"),
     like: (id) => request("POST", `/api/feed/${id}/like`),
     skip: (id) => request("POST", `/api/feed/${id}/skip`),
     likes: () => request("GET", "/api/likes"),
     likeBack: (id) => request("POST", `/api/likes/${id}/like_back`),
     skipLike: (id) => request("POST", `/api/likes/${id}/skip`),
+    matches: () => request("GET", "/api/matches"),
     getSettings: () => request("GET", "/api/settings"),
     updateSettings: (data) => request("PUT", "/api/settings", data),
     resetViews: () => request("POST", "/api/reset-views"),

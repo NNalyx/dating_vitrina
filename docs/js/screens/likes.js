@@ -1,4 +1,5 @@
 import { withLoading } from "../components/loading.js";
+import { attachPullToRefresh } from "../components/pullToRefresh.js";
 
 export function renderLikes(container, api) {
     async function load() {
@@ -13,11 +14,16 @@ export function renderLikes(container, api) {
     function render(likes) {
         if (!likes.length) {
             container.innerHTML = `
-                <div class="screen active likes-empty">
-                    <h2>У тебя пока нет новых лайков</h2>
-                    <p>Свайпай вправо, чтобы получить больше ❤️</p>
+                <div class="screen active likes-empty" id="likes-screen">
+                    <div class="empty-state">
+                        <div class="empty-icon">❤️</div>
+                        <h3>У тебя пока нет новых лайков</h3>
+                        <p>Свайпай вправо, чтобы получить больше.</p>
+                    </div>
                 </div>
             `;
+            const screen = document.getElementById("likes-screen");
+            if (screen) attachPullToRefresh(screen, load);
             return;
         }
 
@@ -41,11 +47,12 @@ export function renderLikes(container, api) {
         }).join("");
 
         container.innerHTML = `
-            <div class="screen active likes">
+            <div class="screen active likes" id="likes-screen">
                 <h2>Тебя лайкнули</h2>
                 <div class="likes-list">${items}</div>
             </div>
         `;
+        attachPullToRefresh(document.getElementById("likes-screen"), load);
 
         container.querySelectorAll("[data-action]").forEach((btn) => {
             btn.addEventListener("click", async () => {

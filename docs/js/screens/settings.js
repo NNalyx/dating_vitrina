@@ -1,4 +1,5 @@
 import { withLoading } from "../components/loading.js";
+import { showModal } from "../components/modal.js";
 
 export function renderSettings(container, api) {
     async function load() {
@@ -36,6 +37,10 @@ export function renderSettings(container, api) {
                         <span>Только мой город</span>
                         <div class="toggle ${settings.only_my_city ? "active" : ""}"></div>
                     </div>
+                    <div class="settings-row settings-toggle" id="interestsToggle">
+                        <span>Только с общими интересами</span>
+                        <div class="toggle ${settings.filter_interests ? "active" : ""}"></div>
+                    </div>
                 </div>
                 <div class="settings-card">
                     <h3>Уведомления</h3>
@@ -65,19 +70,29 @@ export function renderSettings(container, api) {
             saveSettings(settings);
         });
 
+        document.getElementById("interestsToggle").addEventListener("click", () => {
+            settings.filter_interests = !settings.filter_interests;
+            saveSettings(settings);
+        });
+
         document.getElementById("notifToggle").addEventListener("click", () => {
             settings.notifications_enabled = !settings.notifications_enabled;
             saveSettings(settings);
         });
 
         document.getElementById("resetViewsBtn").addEventListener("click", async () => {
-            if (!window.confirm("Все ранее просмотренные анкеты снова начнут показываться в ленте. Продолжить?")) return;
-            try {
-                await api.resetViews();
-                window.alert("Готово — лента обновлена.");
-            } catch (e) {
-                window.alert("Ошибка: " + e.message);
-            }
+            showModal({
+                title: "Сбросить просмотры?",
+                message: "Все ранее просмотренные анкеты снова начнут показываться в ленте.",
+                confirmText: "Сбросить",
+                onConfirm: async () => {
+                    try {
+                        await api.resetViews();
+                    } catch (e) {
+                        showModal({ title: "Ошибка", message: e.message, cancelText: "" });
+                    }
+                },
+            });
         });
     }
 

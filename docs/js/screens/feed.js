@@ -1,4 +1,6 @@
 import { withLoading } from "../components/loading.js";
+import { showModal } from "../components/modal.js";
+import { attachPullToRefresh } from "../components/pullToRefresh.js";
 
 export function renderFeed(container, api, onMutual) {
     let current = null;
@@ -21,11 +23,16 @@ export function renderFeed(container, api, onMutual) {
     function render() {
         if (!current) {
             container.innerHTML = `
-                <div class="screen active feed-empty">
-                    <h2>Пока нет подходящих анкет</h2>
-                    <p>Попробуй изменить фильтры в настройках.</p>
+                <div class="screen active feed-empty" id="feed-screen">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <h3>Пока нет подходящих анкет</h3>
+                        <p>Попробуй изменить фильтры в настройках.</p>
+                    </div>
                 </div>
             `;
+            const screen = document.getElementById("feed-screen");
+            if (screen) attachPullToRefresh(screen, load);
             return;
         }
 
@@ -62,16 +69,25 @@ export function renderFeed(container, api, onMutual) {
         document.getElementById("reportBtn").addEventListener("click", async (e) => {
             e.stopPropagation();
             if (!current) return;
-            const reason = window.prompt("Причина жалобы:");
-            if (!reason) return;
-            try {
-                await api.report(current.user_id, reason);
-                window.alert("Жалоба отправлена.");
-            } catch (e) {
-                window.alert("Ошибка: " + e.message);
-            }
+            showModal({
+                title: "Жалоба",
+                message: "Укажи причину жалобы:",
+                input: true,
+                inputPlaceholder: "Причина",
+                confirmText: "Отправить",
+                onConfirm: async (reason) => {
+                    if (!reason) return;
+                    try {
+                        await api.report(current.user_id, reason);
+                        showModal({ title: "Спасибо", message: "Жалоба отправлена.", cancelText: "" });
+                    } catch (e) {
+                        showModal({ title: "Ошибка", message: e.message, cancelText: "" });
+                    }
+                },
+            });
         });
         initSwipe();
+        attachPullToRefresh(document.getElementById("feed-screen"), load);
     }
 
     function _label(goal) {

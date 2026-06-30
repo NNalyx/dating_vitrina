@@ -55,7 +55,9 @@ def filter_candidates(me: dict, candidates: list[dict], viewed_ids: set[int]) ->
     min_age = me.get("filter_min_age", 16)
     max_age = me.get("filter_max_age", 100)
     only_my_city = bool(me.get("filter_only_my_city", 0))
+    filter_interests = bool(me.get("filter_interests", 0))
     my_city = me.get("city")
+    my_interests = _parse_interests(me.get("interests"))
 
     results = []
     for candidate in candidates:
@@ -73,6 +75,10 @@ def filter_candidates(me: dict, candidates: list[dict], viewed_ids: set[int]) ->
             continue
         if only_my_city and my_city and candidate.get("city", "").lower() != my_city.lower():
             continue
+        if filter_interests:
+            their_interests = _parse_interests(candidate.get("interests"))
+            if not my_interests or not their_interests or not (my_interests & their_interests):
+                continue
         results.append(candidate)
     return results
 

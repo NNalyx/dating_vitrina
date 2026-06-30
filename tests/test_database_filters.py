@@ -52,7 +52,20 @@ def test_update_user_filters():
         asyncio.run(_add_sample_user(2))
         asyncio.run(update_user_filters(2, min_age=20, max_age=30, only_my_city=True))
         filters = asyncio.run(get_user_filters(2))
-        assert filters == {"min_age": 20, "max_age": 30, "only_my_city": True}
+        assert filters == {"min_age": 20, "max_age": 30, "only_my_city": True, "filter_interests": False}
+    finally:
+        _teardown()
+
+
+def test_filter_interests_toggle():
+    _setup()
+    try:
+        asyncio.run(_add_sample_user(4))
+        asyncio.run(update_user(4, filter_interests=True))
+        filters = asyncio.run(get_user_filters(4))
+        assert filters["filter_interests"] is True
+        user = asyncio.run(get_user(4))
+        assert user["filter_interests"] == 1
     finally:
         _teardown()
 

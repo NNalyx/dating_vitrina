@@ -1,4 +1,5 @@
 import { renderInterestPicker } from "../components/interestPicker.js";
+import { renderCaptcha } from "../components/captcha.js";
 
 const GENDER_OPTIONS = [
     { value: "male", label: "Парень" },
@@ -27,6 +28,7 @@ const STEPS = [
     { id: "interests", title: "Выбери интересы (минимум 3)" },
     { id: "city", title: "Твой город" },
     { id: "photo", title: "Фото профиля" },
+    { id: "preview", title: "Проверь анкету" },
 ];
 
 export function renderRegistration(app, api, onComplete) {
@@ -151,7 +153,26 @@ export function renderRegistration(app, api, onComplete) {
                 }
             });
 
-            document.getElementById("skipPhoto").addEventListener("click", () => submit());
+            document.getElementById("skipPhoto").addEventListener("click", () => handleNext());
+        } else if (id === "preview") {
+            const photo = profile.photo_file_id
+                ? `<img class="preview-photo" src="${api.photoUrl(profile.photo_file_id)}" alt="">`
+                : `<div class="preview-photo preview-photo-placeholder">${profile.name[0]}</div>`;
+            const interests = Array.from(profile.interests).join(", ") || "не выбраны";
+            container.innerHTML = `
+                <div class="preview-card">
+                    ${photo}
+                    <div class="preview-info">
+                        <h3>${profile.name}, ${profile.age}</h3>
+                        <p>${profile.city}</p>
+                        <p>Ищу: ${LOOKING_OPTIONS.find(o => o.value === profile.looking_for)?.label || ""}</p>
+                        <p>Цель: ${GOAL_OPTIONS.find(o => o.value === profile.goal)?.label || ""}</p>
+                        <p>Интересы: ${interests}</p>
+                    </div>
+                </div>
+                <p class="hint">Так тебя будут видеть другие пользователи.</p>
+            `;
+            document.getElementById("nextBtn").textContent = "Зарегистрироваться";
         }
 
         container.querySelectorAll(".option").forEach(btn => {
@@ -206,26 +227,59 @@ export function renderRegistration(app, api, onComplete) {
             step++;
             render();
         } else {
-            await submit();
+            await showCaptcha();
         }
     }
 
-    async function submit() {
-        const errorEl = document.getElementById("error");
+    async function showCaptcha() {
         try {
-            await api.register({
-                age: profile.age,
-                name: profile.name,
-                gender: profile.gender,
-                looking_for: profile.looking_for,
-                goal: profile.goal,
-                interests: Array.from(profile.interests),
-                city: profile.city,
-                photo_file_id: profile.photo_file_id,
-            });
+            const challenge = await api.getCaptcha();
+            const overlay = document.createElement("div");
+            overlay.className = "profile-editor active";
+            overlay.innerHTML = `
+                <div class="profile-editor-content">
+                    <h3>Проверка</h3>
+                    <div id="captchaBox"></div>
+                    <button class="primary" id="captchaSubmit">Подтвердить</button>
+                    <button class="secondary" id="captchaBack">Назад</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const box = document.getElementById("captchaBox");
+            const controller = renderCaptcha(box, challenge, () => submit(controller, challenge, overlay));
+
+            document.getElementById("captchaSubmit").addEventListener("click", () => controller.submit());
+            document.getElementById("captchaBack").addEventListener("click", () => overlay.remove());
+        } catch (e) {
+            document.getElementById("error").textContent = e.message;
+        }
+    }
+
+    async function submit(controller, challenge, overlay) {
+        const answer = controller.getValue();
+        if (!answer) return;
+        try {
+            await api.register(
+                {
+                    age: profile.age,
+                    name: profile.name,
+                    gender: profile.gender,
+                    looking_for: profile.looking_for,
+                    goal: profile.goal,
+                    interests: Array.from(profile.interests),
+                    city: profile.city,
+                    photo_file_id: profile.photo_file_id,
+                },
+                {
+                    captcha_token: challenge.token,
+                    captcha_answer: answer,
+                }
+            );
+            overlay.remove();
             onComplete();
         } catch (e) {
-            errorEl.textContent = e.message;
+            controller.showError(e.message || "Неверный ответ");
         }
     }
 

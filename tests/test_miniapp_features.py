@@ -1,3 +1,5 @@
+import re
+
 import aiohttp
 import pytest
 from unittest.mock import AsyncMock
@@ -5,10 +7,18 @@ from unittest.mock import AsyncMock
 from tests.test_web_auth import _make_init_data
 
 
+def _solve_captcha(question: str) -> str:
+    match = re.match(r"(\d+)\s*([+\-])\s*(\d+)", question)
+    a, op, b = int(match.group(1)), match.group(2), int(match.group(3))
+    return str(a + b if op == "+" else a - b)
+
+
 @pytest.fixture
 async def client(aiohttp_client, tmp_path, monkeypatch):
     monkeypatch.setattr("config.DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setattr("database.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("config.BOT_TOKEN", "test_token_12345")
+    monkeypatch.setattr("web_routes.BOT_TOKEN", "test_token_12345")
     from database import init_db
 
     await init_db()
@@ -22,6 +32,8 @@ async def client(aiohttp_client, tmp_path, monkeypatch):
 async def client_with_bot(aiohttp_client, tmp_path, monkeypatch):
     monkeypatch.setattr("config.DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setattr("database.DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr("config.BOT_TOKEN", "test_token_12345")
+    monkeypatch.setattr("web_routes.BOT_TOKEN", "test_token_12345")
     from database import init_db
 
     await init_db()
@@ -35,8 +47,16 @@ async def client_with_bot(aiohttp_client, tmp_path, monkeypatch):
 
 async def _register(client, monkeypatch, user_id, payload):
     monkeypatch.setattr("services.init_data.BOT_TOKEN", "test_token_12345")
+    captcha_resp = await client.get("/api/captcha")
+    assert captcha_resp.status == 200
+    captcha = await captcha_resp.json()
     init_data = _make_init_data(user_id, "test_token_12345")
-    data = {"initData": init_data, **payload}
+    data = {
+        "initData": init_data,
+        "captcha_token": captcha["token"],
+        "captcha_answer": _solve_captcha(captcha["question"]),
+        **payload,
+    }
     resp = await client.post("/api/register", json=data)
     assert resp.status == 201, await resp.json()
 
@@ -257,7 +277,13 @@ async def test_settings_get_and_update(client, monkeypatch):
 
     put_resp = await client.put(
         "/api/settings",
-        json={"min_age": 20, "max_age": 30, "only_my_city": True, "notifications_enabled": False},
+        json={
+            "min_age": 20,
+            "max_age": 30,
+            "only_my_city": True,
+            "filter_interests": True,
+            "notifications_enabled": False,
+        },
         headers=headers,
     )
     assert put_resp.status == 200
@@ -267,6 +293,7 @@ async def test_settings_get_and_update(client, monkeypatch):
     assert settings2["min_age"] == 20
     assert settings2["max_age"] == 30
     assert settings2["only_my_city"] is True
+    assert settings2["filter_interests"] is True
     assert settings2["notifications_enabled"] is False
 
 

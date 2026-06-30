@@ -13,6 +13,7 @@ load_dotenv(
 # Telegram bot token is read from the BOT_TOKEN environment variable or a .env file.
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 DB_PATH = "dating_bot.db"
+PHOTOS_DIR = "data/photos"
 OWNER_ID = 8241460494
 MIN_AGE = 16
 MAX_AGE = 100

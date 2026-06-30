@@ -23,6 +23,10 @@ export function renderNav(container, api, current, onChange) {
                     <span class="nav-icon">❤️</span>
                     <span class="nav-label">Лайки</span>
                 </button>
+                <button class="nav-item ${current === "matches" ? "active" : ""}" data-screen="matches">
+                    <span class="nav-icon">💞</span>
+                    <span class="nav-label">Мэтчи</span>
+                </button>
                 <button class="nav-item ${current === "profile" ? "active" : ""}" data-screen="profile">
                     ${profilePhoto}
                     <span class="nav-label">Профиль</span>
