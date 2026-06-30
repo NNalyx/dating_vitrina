@@ -2,7 +2,7 @@ import asyncio
 import os
 
 import database
-from database import init_db, add_user, get_user, update_user_filters, get_user_filters
+from database import init_db, add_user, get_user, update_user, update_user_filters, get_user_filters
 
 TEST_DB = "test_filters.db"
 ORIGINAL_DB_PATH = database.DB_PATH
@@ -53,5 +53,16 @@ def test_update_user_filters():
         asyncio.run(update_user_filters(2, min_age=20, max_age=30, only_my_city=True))
         filters = asyncio.run(get_user_filters(2))
         assert filters == {"min_age": 20, "max_age": 30, "only_my_city": True}
+    finally:
+        _teardown()
+
+
+def test_update_user_username():
+    _setup()
+    try:
+        asyncio.run(_add_sample_user(3))
+        asyncio.run(update_user(3, username="new_user"))
+        user = asyncio.run(get_user(3))
+        assert user["username"] == "new_user"
     finally:
         _teardown()

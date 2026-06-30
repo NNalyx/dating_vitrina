@@ -163,6 +163,7 @@ async def get_user(user_id: int) -> dict | None:
 async def update_user(
     user_id: int,
     *,
+    username: str | None = None,
     age: int | None = None,
     name: str | None = None,
     looking_for: str | None = None,
@@ -178,6 +179,9 @@ async def update_user(
     """Update one or more user fields."""
     fields = []
     values = []
+    if username is not None:
+        fields.append("username = ?")
+        values.append(username)
     if age is not None:
         fields.append("age = ?")
         values.append(age)
