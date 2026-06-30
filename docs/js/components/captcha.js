@@ -5,8 +5,10 @@ export function renderCaptcha(container, { question, token }, onSubmit) {
             <p class="captcha-question">${question} = ?</p>
             <div class="captcha-display" id="captchaDisplay"></div>
             <div class="captcha-keyboard">
-                ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => `<button class="captcha-key" data-value="${n}">${n}</button>`).join("")}
+                ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="captcha-key" data-value="${n}">${n}</button>`).join("")}
+                <button class="captcha-key" data-value="0">0</button>
             </div>
+            <button class="primary" id="captchaConfirm">Подтвердить</button>
             <button class="secondary" id="captchaClear">Стереть</button>
             <p class="captcha-error" id="captchaError"></p>
         </div>
@@ -15,6 +17,7 @@ export function renderCaptcha(container, { question, token }, onSubmit) {
     const display = document.getElementById("captchaDisplay");
     const errorEl = document.getElementById("captchaError");
     let value = "";
+    let autoSubmitTimer = null;
 
     function updateDisplay() {
         display.textContent = value || "_";
@@ -22,14 +25,20 @@ export function renderCaptcha(container, { question, token }, onSubmit) {
         void display.offsetWidth;
     }
 
+    function scheduleAutoSubmit() {
+        clearTimeout(autoSubmitTimer);
+        if (!value) return;
+        autoSubmitTimer = setTimeout(() => {
+            if (value) onSubmit(value);
+        }, 500);
+    }
+
     container.querySelectorAll(".captcha-key").forEach(btn => {
         btn.addEventListener("click", () => {
             if (value.length >= 2) return;
             value += btn.dataset.value;
             updateDisplay();
-            if (value.length === 2 || (value.length === 1 && parseInt(value, 10) > 1 && question.includes("-"))) {
-                // Auto-submit for single-digit answers if appropriate.
-            }
+            scheduleAutoSubmit();
         });
     });
 
@@ -37,6 +46,12 @@ export function renderCaptcha(container, { question, token }, onSubmit) {
         value = "";
         updateDisplay();
         errorEl.textContent = "";
+        clearTimeout(autoSubmitTimer);
+    });
+
+    document.getElementById("captchaConfirm").addEventListener("click", () => {
+        clearTimeout(autoSubmitTimer);
+        if (value) onSubmit(value);
     });
 
     return {

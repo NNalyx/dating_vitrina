@@ -67,6 +67,8 @@ INTEREST_CATEGORIES = [
             "Консоли (PlayStation / Xbox / Switch)",
             "Настольные игры",
             "VR / VRChat",
+            "Brawl Stars",
+            "Standoff 2",
         ],
     ),
     (

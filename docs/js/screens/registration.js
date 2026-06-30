@@ -235,12 +235,10 @@ export function renderRegistration(app, api, onComplete) {
         try {
             const challenge = await api.getCaptcha();
             const overlay = document.createElement("div");
-            overlay.className = "profile-editor active";
+            overlay.className = "captcha-overlay";
             overlay.innerHTML = `
-                <div class="profile-editor-content">
-                    <h3>Проверка</h3>
+                <div class="captcha-card">
                     <div id="captchaBox"></div>
-                    <button class="primary" id="captchaSubmit">Подтвердить</button>
                     <button class="secondary" id="captchaBack">Назад</button>
                 </div>
             `;
@@ -249,7 +247,6 @@ export function renderRegistration(app, api, onComplete) {
             const box = document.getElementById("captchaBox");
             const controller = renderCaptcha(box, challenge, () => submit(controller, challenge, overlay));
 
-            document.getElementById("captchaSubmit").addEventListener("click", () => controller.submit());
             document.getElementById("captchaBack").addEventListener("click", () => overlay.remove());
         } catch (e) {
             document.getElementById("error").textContent = e.message;
