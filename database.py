@@ -29,6 +29,7 @@ async def init_db() -> None:
                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
                 is_banned INTEGER NOT NULL DEFAULT 0,
                 is_fake INTEGER NOT NULL DEFAULT 0,
+                bio TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -40,6 +41,11 @@ async def init_db() -> None:
                 )
             except sqlite3.OperationalError:
                 pass
+
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN bio TEXT")
+        except sqlite3.OperationalError:
+            pass
 
         await db.execute(
             """
@@ -124,14 +130,15 @@ async def add_user(
     photo_file_id: str | None = None,
     city: str | None = None,
     is_fake: bool = False,
+    bio: str | None = None,
 ) -> None:
     """Insert a newly registered user into the database."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
             INSERT INTO users
-            (user_id, username, age, name, gender, looking_for, goal, interests, photo_file_id, city, notifications_enabled, is_fake)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            (user_id, username, age, name, gender, looking_for, goal, interests, photo_file_id, city, notifications_enabled, is_fake, bio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
             (
                 user_id,
@@ -145,6 +152,7 @@ async def add_user(
                 photo_file_id,
                 city,
                 1 if is_fake else 0,
+                bio,
             ),
         )
         await db.commit()
@@ -177,6 +185,7 @@ async def update_user(
     filter_max_age: int | None = None,
     filter_only_my_city: bool | None = None,
     filter_interests: bool | None = None,
+    bio: str | None = None,
 ) -> None:
     """Update one or more user fields."""
     fields = []
@@ -220,6 +229,9 @@ async def update_user(
     if filter_interests is not None:
         fields.append("filter_interests = ?")
         values.append(1 if filter_interests else 0)
+    if bio is not None:
+        fields.append("bio = ?")
+        values.append(bio)
 
     if not fields:
         return
@@ -680,6 +692,7 @@ async def add_fake_user(
     interests: list[str],
     city: str | None = None,
     photo_file_id: str | None = None,
+    bio: str | None = None,
 ) -> int:
     """Create a fake profile and return its generated user_id."""
     user_id = await get_next_fake_user_id()
@@ -695,5 +708,6 @@ async def add_fake_user(
         photo_file_id=photo_file_id,
         city=city,
         is_fake=True,
+        bio=bio,
     )
     return user_id

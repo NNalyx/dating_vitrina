@@ -79,3 +79,14 @@ def test_update_user_username():
         assert user["username"] == "new_user"
     finally:
         _teardown()
+
+
+def test_add_user_stores_bio():
+    _setup()
+    try:
+        asyncio.run(_add_sample_user(42))
+        asyncio.run(update_user(42, bio="Люблю кофе и кино"))
+        user = asyncio.run(get_user(42))
+        assert user["bio"] == "Люблю кофе и кино"
+    finally:
+        _teardown()
