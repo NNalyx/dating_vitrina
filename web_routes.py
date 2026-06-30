@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -253,10 +254,20 @@ async def upload_photo(request: web.Request) -> web.Response:
             disable_notification=True,
         )
         file_id = message.photo[-1].file_id
-        await bot.delete_message(chat_id=user_id, message_id=message.message_id)
+        # Delete the temporary message after a short delay so Telegram has
+        # time to cache the file and the preview can be fetched reliably.
+        asyncio.create_task(_delete_uploaded_message(bot, user_id, message.message_id))
         return web.json_response({"file_id": file_id})
     finally:
         os.remove(tmp_path)
+
+
+async def _delete_uploaded_message(bot: Bot, chat_id: int, message_id: int) -> None:
+    await asyncio.sleep(5)
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 
 @routes.get("/api/me")
