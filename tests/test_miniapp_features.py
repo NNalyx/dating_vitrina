@@ -85,7 +85,7 @@ async def test_validate_city_invalid(client, monkeypatch):
     assert data["valid"] is False
 
 
-async def test_feed_returns_done_when_alone(client, monkeypatch):
+async def test_feed_returns_fake_when_alone(client, monkeypatch):
     await _register(
         client,
         monkeypatch,
@@ -105,7 +105,7 @@ async def test_feed_returns_done_when_alone(client, monkeypatch):
     resp = await client.get("/api/feed", headers=headers)
     assert resp.status == 200
     data = await resp.json()
-    assert data.get("done") is True
+    assert data.get("is_fake") == 1
 
 
 async def test_feed_returns_candidate(client, monkeypatch):
