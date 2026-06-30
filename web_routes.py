@@ -36,6 +36,7 @@ from database import (
 from keyboards import mini_app_button_keyboard
 from services.city_validation import is_valid_city, normalize_city
 from services.init_data import get_init_data_user, validate_init_data
+from services.fake_profile_generator import generate_fake_profiles_batch
 from services.matching import filter_candidates, score_candidates
 from services.moderation import is_clean_city, is_clean_name
 from services.profile import format_profile
@@ -340,6 +341,13 @@ async def feed(request: web.Request) -> web.Response:
     viewed_ids = await get_viewed_ids(user_id)
     filtered = filter_candidates(user, candidates, viewed_ids)
     scored = score_candidates(user, filtered)
+
+    if not scored:
+        await generate_fake_profiles_batch(user, count=3)
+        candidates = await get_all_users()
+        viewed_ids = await get_viewed_ids(user_id)
+        filtered = filter_candidates(user, candidates, viewed_ids)
+        scored = score_candidates(user, filtered)
 
     if not scored:
         return web.json_response({"done": True})
