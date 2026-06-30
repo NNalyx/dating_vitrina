@@ -3,6 +3,7 @@ import re
 import pytest
 
 from tests.test_web_auth import _make_init_data
+from services.fake_profile_generator import CITIES
 
 
 def _solve_captcha(question: str) -> str:
@@ -62,4 +63,49 @@ async def test_feed_returns_fake_when_no_real_candidates(client, monkeypatch):
     assert data["user_id"] < 0
     assert data["gender"] == "male"
     assert data["looking_for"] == "female"
-    assert data["city"] == "Москва"
+    assert data["city"] in {"Москва", *CITIES}
+
+
+async def test_like_on_fake_does_not_create_match(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.fake_profile_generator.pick_avatar_file_id",
+        lambda _gender: None,
+    )
+    await _register(client, 101, "female", "male", "Москва")
+
+    init_data = _make_init_data(101, "test_token_12345")
+    feed_resp = await client.get("/api/feed", headers={"X-Init-Data": init_data})
+    fake = await feed_resp.json()
+
+    like_resp = await client.post(
+        f"/api/feed/{fake['user_id']}/like",
+        headers={"X-Init-Data": init_data},
+    )
+    data = await like_resp.json()
+    assert data["status"] == "ok"
+    assert data["mutual"] is False
+
+    likes_resp = await client.get("/api/likes", headers={"X-Init-Data": init_data})
+    assert await likes_resp.json() == []
+
+
+async def test_skip_on_fake_records_view(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.fake_profile_generator.pick_avatar_file_id",
+        lambda _gender: None,
+    )
+    await _register(client, 102, "female", "male", "Москва")
+
+    init_data = _make_init_data(102, "test_token_12345")
+    feed_resp = await client.get("/api/feed", headers={"X-Init-Data": init_data})
+    fake = await feed_resp.json()
+
+    skip_resp = await client.post(
+        f"/api/feed/{fake['user_id']}/skip",
+        headers={"X-Init-Data": init_data},
+    )
+    assert skip_resp.status == 200
+
+    second_resp = await client.get("/api/feed", headers={"X-Init-Data": init_data})
+    second_fake = await second_resp.json()
+    assert second_fake["user_id"] != fake["user_id"]

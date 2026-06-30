@@ -362,6 +362,11 @@ async def feed_like(request: web.Request) -> web.Response:
     user_id = user["user_id"]
 
     candidate_id = int(request.match_info["id"])
+    candidate = await get_user(candidate_id)
+    if candidate and candidate.get("is_fake"):
+        await add_view(user_id, candidate_id)
+        return web.json_response({"status": "ok", "mutual": False})
+
     await add_view(user_id, candidate_id)
     await add_like(user_id, candidate_id)
 
@@ -399,7 +404,7 @@ async def likes(request: web.Request) -> web.Response:
     result = []
     for candidate in await get_all_users():
         cid = candidate["user_id"]
-        if cid == user_id:
+        if cid == user_id or candidate.get("is_fake"):
             continue
         if await has_like(cid, user_id) and not await has_like(user_id, cid):
             result.append(candidate)
