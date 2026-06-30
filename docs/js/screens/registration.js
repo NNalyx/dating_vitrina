@@ -233,7 +233,7 @@ export function renderRegistration(app, api, onComplete) {
 
     async function showCaptcha() {
         try {
-            const challenge = await api.getCaptcha();
+            let challenge = await api.getCaptcha();
             const overlay = document.createElement("div");
             overlay.className = "captcha-overlay";
             overlay.innerHTML = `
@@ -245,38 +245,57 @@ export function renderRegistration(app, api, onComplete) {
             document.body.appendChild(overlay);
 
             const box = document.getElementById("captchaBox");
-            const controller = renderCaptcha(box, challenge, () => submit(controller, challenge, overlay));
+            const questionEl = document.createElement("span");
+
+            function mount(ch) {
+                box.innerHTML = "";
+                box.appendChild(questionEl);
+                questionEl.textContent = `${ch.question} = ?`;
+                return renderCaptcha(box, ch, () => submit(controller, ch, overlay));
+            }
+
+            let controller = mount(challenge);
+
+            async function refreshChallenge() {
+                try {
+                    challenge = await api.getCaptcha();
+                    controller = mount(challenge);
+                } catch (e) {
+                    controller.showError(e.message);
+                }
+            }
+
+            async function submit(controller, challenge, overlay) {
+                const answer = controller.getValue();
+                if (!answer) return;
+                try {
+                    await api.register(
+                        {
+                            age: profile.age,
+                            name: profile.name,
+                            gender: profile.gender,
+                            looking_for: profile.looking_for,
+                            goal: profile.goal,
+                            interests: Array.from(profile.interests),
+                            city: profile.city,
+                            photo_file_id: profile.photo_file_id,
+                        },
+                        {
+                            captcha_token: challenge.token,
+                            captcha_answer: answer,
+                        }
+                    );
+                    overlay.remove();
+                    onComplete();
+                } catch (e) {
+                    controller.showError(e.message || "Неверный ответ");
+                    setTimeout(() => refreshChallenge(), 600);
+                }
+            }
 
             document.getElementById("captchaBack").addEventListener("click", () => overlay.remove());
         } catch (e) {
             document.getElementById("error").textContent = e.message;
-        }
-    }
-
-    async function submit(controller, challenge, overlay) {
-        const answer = controller.getValue();
-        if (!answer) return;
-        try {
-            await api.register(
-                {
-                    age: profile.age,
-                    name: profile.name,
-                    gender: profile.gender,
-                    looking_for: profile.looking_for,
-                    goal: profile.goal,
-                    interests: Array.from(profile.interests),
-                    city: profile.city,
-                    photo_file_id: profile.photo_file_id,
-                },
-                {
-                    captcha_token: challenge.token,
-                    captcha_answer: answer,
-                }
-            );
-            overlay.remove();
-            onComplete();
-        } catch (e) {
-            controller.showError(e.message || "Неверный ответ");
         }
     }
 

@@ -1082,3 +1082,24 @@ input:focus, select:focus {
 .captcha-card .captcha {
     gap: 14px;
 }
+
+
+.captcha-input {
+    background: var(--bg);
+    border: 1px solid var(--surface-hover);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text);
+    font-size: 18px;
+    text-align: center;
+    width: 100%;
+}
+
+.captcha-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.captcha-card .captcha {
+    gap: 14px;
+}

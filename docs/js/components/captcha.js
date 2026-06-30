@@ -3,68 +3,48 @@ export function renderCaptcha(container, { question, token }, onSubmit) {
         <div class="captcha">
             <h3>Подтверди, что ты не робот 🤖</h3>
             <p class="captcha-question">${question} = ?</p>
-            <div class="captcha-display" id="captchaDisplay"></div>
-            <div class="captcha-keyboard">
-                ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="captcha-key" data-value="${n}">${n}</button>`).join("")}
-                <button class="captcha-key" data-value="0">0</button>
-            </div>
-            <button class="primary" id="captchaConfirm">Подтвердить</button>
-            <button class="secondary" id="captchaClear">Стереть</button>
+            <input
+                type="number"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                class="captcha-input"
+                id="captchaInput"
+                placeholder="Введи ответ"
+                autocomplete="off"
+            />
             <p class="captcha-error" id="captchaError"></p>
+            <button class="primary" id="captchaConfirm">Подтвердить</button>
         </div>
     `;
 
-    const display = document.getElementById("captchaDisplay");
+    const input = document.getElementById("captchaInput");
     const errorEl = document.getElementById("captchaError");
-    let value = "";
-    let autoSubmitTimer = null;
 
-    function updateDisplay() {
-        display.textContent = value || "_";
-        display.classList.remove("shake");
-        void display.offsetWidth;
-    }
-
-    function scheduleAutoSubmit() {
-        clearTimeout(autoSubmitTimer);
+    function submitValue() {
+        const value = input.value.trim();
         if (!value) return;
-        autoSubmitTimer = setTimeout(() => {
-            if (value) onSubmit(value);
-        }, 500);
+        onSubmit(value);
     }
 
-    container.querySelectorAll(".captcha-key").forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (value.length >= 2) return;
-            value += btn.dataset.value;
-            updateDisplay();
-            scheduleAutoSubmit();
-        });
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitValue();
     });
 
-    document.getElementById("captchaClear").addEventListener("click", () => {
-        value = "";
-        updateDisplay();
+    input.addEventListener("input", () => {
         errorEl.textContent = "";
-        clearTimeout(autoSubmitTimer);
     });
 
-    document.getElementById("captchaConfirm").addEventListener("click", () => {
-        clearTimeout(autoSubmitTimer);
-        if (value) onSubmit(value);
-    });
+    document.getElementById("captchaConfirm").addEventListener("click", submitValue);
+
+    input.focus();
 
     return {
-        getValue: () => value,
-        submit: () => {
-            if (!value) return;
-            onSubmit(value);
-        },
+        getValue: () => input.value.trim(),
+        submit: submitValue,
         showError: (msg) => {
             errorEl.textContent = msg;
-            display.classList.add("shake");
-            value = "";
-            updateDisplay();
+            input.value = "";
+            input.focus();
         },
     };
 }
