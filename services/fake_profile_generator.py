@@ -1,12 +1,7 @@
-import json
 import random
-from pathlib import Path
 
 from config import INTEREST_CATEGORIES
-from database import add_fake_user, get_user
-
-AVATARS_DIR = Path("data/fake_avatars")
-FILE_IDS_PATH = AVATARS_DIR / "file_ids.json"
+from database import add_fake_user, get_random_fake_avatar_file_id, get_user
 
 ALL_INTERESTS = [item for _, _, items in INTEREST_CATEGORIES for item in items]
 
@@ -48,6 +43,52 @@ FEMALE_NAMES = [
     "Юлия",
 ]
 
+MALE_NICKNAMES = [
+    "Некит",
+    "Саня",
+    "Димон",
+    "Лёха",
+    "Пашка",
+    "Макс",
+    "Артёмка",
+    "Кирюха",
+    "Миша",
+    "Ваня",
+    "Егорка",
+    "Матвей",
+    "Тёма",
+    "Рома",
+    "Влад",
+    "Павлуша",
+    "Стас",
+    "Глеб",
+    "Тимоха",
+    "Ярик",
+]
+
+FEMALE_NICKNAMES = [
+    "Лиска",
+    "Машка",
+    "Настюха",
+    "Вика",
+    "Катя",
+    "Соня",
+    "Даша",
+    "Алиса",
+    "Вероника",
+    "Поля",
+    "Лиза",
+    "Ксюша",
+    "Саша",
+    "Оля",
+    "Таня",
+    "Юля",
+    "Иришка",
+    "Женька",
+    "Алёнка",
+    "Надюша",
+]
+
 CITIES = [
     "Москва",
     "Санкт-Петербург",
@@ -86,33 +127,17 @@ BIO_TEMPLATES = [
 ]
 
 
-def _load_file_ids() -> list[dict]:
-    if not FILE_IDS_PATH.exists():
-        return []
-    return json.loads(FILE_IDS_PATH.read_text(encoding="utf-8"))
-
-
-def pick_avatar_file_id(gender: str) -> str | None:
-    file_ids = _load_file_ids()
-    if not file_ids:
-        return None
-    gender_key = gender if gender in ("male", "female") else "neutral"
-    candidates = [record for record in file_ids if record.get("gender") == gender_key]
-    if not candidates:
-        candidates = [record for record in file_ids if record.get("gender") == "neutral"]
-    if not candidates:
-        candidates = file_ids
-    return random.choice(candidates)["file_id"]
+async def pick_avatar_file_id(gender: str) -> str | None:
+    return await get_random_fake_avatar_file_id(gender)
 
 
 def _pick_name(gender: str) -> str:
-    pool = (
-        MALE_NAMES
-        if gender == "male"
-        else FEMALE_NAMES
-        if gender == "female"
-        else MALE_NAMES + FEMALE_NAMES
-    )
+    if gender == "male":
+        pool = MALE_NAMES if random.random() > 0.4 else MALE_NICKNAMES
+    elif gender == "female":
+        pool = FEMALE_NAMES if random.random() > 0.4 else FEMALE_NICKNAMES
+    else:
+        pool = MALE_NAMES + FEMALE_NAMES + MALE_NICKNAMES + FEMALE_NICKNAMES
     return random.choice(pool)
 
 
@@ -136,11 +161,17 @@ def _choose_gender_and_looking_for(viewer: dict) -> tuple[str, str]:
 
 
 def _pick_age(viewer: dict) -> int:
-    min_age = max(viewer.get("filter_min_age", 18), 18)
-    max_age = min(viewer.get("filter_max_age", 35), 45)
-    if min_age > max_age:
-        max_age = min_age
-    return random.randint(min_age, max_age)
+    min_age = max(viewer.get("filter_min_age", 16), 16)
+    max_age = min(viewer.get("filter_max_age", 100), 100)
+
+    user_age = viewer.get("age")
+    if user_age is not None:
+        delta = random.randint(-3, 3)
+        target = user_age + delta
+    else:
+        target = random.randint(min_age, max_age)
+
+    return max(min_age, min(max_age, target))
 
 
 def _pick_city(viewer: dict) -> str:
@@ -200,7 +231,7 @@ async def generate_fake_profiles_batch(viewer: dict, count: int = 3) -> list[dic
         goal = _pick_goal(viewer)
         interests = _pick_interests(viewer)
         bio = _generate_bio(name, age, city, interests, goal)
-        photo_file_id = pick_avatar_file_id(gender)
+        photo_file_id = await pick_avatar_file_id(gender)
 
         user_id = await add_fake_user(
             name=name,

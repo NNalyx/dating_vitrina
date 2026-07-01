@@ -11,6 +11,7 @@ from services.fake_profile_generator import (
     _pick_age,
     _pick_city,
     _pick_interests,
+    _pick_name,
     generate_fake_profiles_batch,
 )
 
@@ -51,10 +52,23 @@ def test_gender_matches_viewer_preference():
     assert looking_for == "female"
 
 
-def test_age_respects_viewer_filters():
-    viewer = {"filter_min_age": 20, "filter_max_age": 25}
-    age = _pick_age(viewer)
-    assert 20 <= age <= 25
+def test_age_is_close_to_viewer_age():
+    viewer = {"age": 22, "filter_min_age": 16, "filter_max_age": 100}
+    for _ in range(50):
+        age = _pick_age(viewer)
+        assert 19 <= age <= 25
+
+
+def test_age_respects_filters():
+    viewer = {"age": 22, "filter_min_age": 23, "filter_max_age": 25}
+    for _ in range(50):
+        age = _pick_age(viewer)
+        assert 23 <= age <= 25
+
+
+def test_name_can_be_nickname():
+    names = {_pick_name("male") for _ in range(100)}
+    assert len(names) > 10
 
 
 def test_city_respects_only_my_city():
@@ -80,7 +94,11 @@ def test_bio_is_uniqueish():
 
 
 @pytest.mark.asyncio
-async def test_generate_batch_creates_fake_users():
+async def test_generate_batch_creates_fake_users(monkeypatch):
+    monkeypatch.setattr(
+        "database.get_random_fake_avatar_file_id",
+        lambda _gender: None,
+    )
     await _add_viewer()
     viewer = await database.get_user(1)
     fakes = await generate_fake_profiles_batch(viewer, count=2)
