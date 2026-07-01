@@ -50,7 +50,7 @@ async def _register(client, user_id: int, gender: str, looking_for: str, city: s
 
 async def test_feed_returns_fake_when_no_real_candidates(client, monkeypatch):
     monkeypatch.setattr(
-        "services.fake_profile_generator.pick_avatar_file_id",
+        "database.get_random_fake_avatar_file_id",
         lambda _gender: None,
     )
     await _register(client, 100, "female", "male", "Москва")
@@ -68,7 +68,7 @@ async def test_feed_returns_fake_when_no_real_candidates(client, monkeypatch):
 
 async def test_like_on_fake_does_not_create_match(client, monkeypatch):
     monkeypatch.setattr(
-        "services.fake_profile_generator.pick_avatar_file_id",
+        "database.get_random_fake_avatar_file_id",
         lambda _gender: None,
     )
     await _register(client, 101, "female", "male", "Москва")
@@ -91,7 +91,7 @@ async def test_like_on_fake_does_not_create_match(client, monkeypatch):
 
 async def test_skip_on_fake_records_view(client, monkeypatch):
     monkeypatch.setattr(
-        "services.fake_profile_generator.pick_avatar_file_id",
+        "database.get_random_fake_avatar_file_id",
         lambda _gender: None,
     )
     await _register(client, 102, "female", "male", "Москва")
