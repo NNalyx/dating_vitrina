@@ -23,10 +23,3 @@ dating_bot.db
 # config.py is tracked with BOT_TOKEN read from an environment variable.
 # Do not add real tokens here.
 data/photos/
-
-# Fake avatars (AI-generated faces and cached Telegram file_ids)
-data/fake_avatars/**/*.jpg
-data/fake_avatars/**/*.jpeg
-data/fake_avatars/**/*.png
-data/fake_avatars/file_ids.json
-!data/fake_avatars/**/.gitkeep
