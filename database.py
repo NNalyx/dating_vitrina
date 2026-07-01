@@ -104,6 +104,16 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fake_avatars (
+                avatar_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                gender TEXT NOT NULL,
+                file_id TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         await db.commit()
         await _seed_interests(db)
 
@@ -711,3 +721,41 @@ async def add_fake_user(
         bio=bio,
     )
     return user_id
+
+
+async def add_fake_avatar(gender: str, file_id: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO fake_avatars (gender, file_id) VALUES (?, ?)",
+            (gender, file_id),
+        )
+        await db.commit()
+
+
+async def get_random_fake_avatar_file_id(gender: str) -> str | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        for g in (gender, "neutral"):
+            async with db.execute(
+                "SELECT file_id FROM fake_avatars WHERE gender = ? ORDER BY RANDOM() LIMIT 1",
+                (g,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return row["file_id"]
+        async with db.execute(
+            "SELECT file_id FROM fake_avatars ORDER BY RANDOM() LIMIT 1"
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row["file_id"] if row else None
+
+
+async def count_fake_avatars(gender: str | None = None) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        if gender:
+            async with db.execute(
+                "SELECT COUNT(*) FROM fake_avatars WHERE gender = ?", (gender,)
+            ) as cursor:
+                return (await cursor.fetchone())[0]
+        async with db.execute("SELECT COUNT(*) FROM fake_avatars") as cursor:
+            return (await cursor.fetchone())[0]
