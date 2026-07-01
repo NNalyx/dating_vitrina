@@ -10,9 +10,11 @@ from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarku
 from config import GENDER_OPTIONS, GOAL_OPTIONS, LOOKING_FOR_OPTIONS
 from database import (
     add_admin_log,
+    add_fake_avatar,
     add_fake_user,
     add_interest,
     ban_user,
+    count_fake_avatars,
     delete_fake_users,
     delete_user,
     get_admin_logs,
@@ -34,6 +36,8 @@ from keyboards import (
     admin_back_menu_keyboard,
     admin_bans_keyboard,
     admin_fakes_keyboard,
+    admin_fake_avatar_upload_keyboard,
+    admin_fake_avatars_gender_keyboard,
     admin_interest_category_keyboard,
     admin_interests_keyboard,
     admin_menu_keyboard,
@@ -602,6 +606,76 @@ async def admin_fakes_menu(callback: types.CallbackQuery, state: FSMContext) -> 
             parse_mode="HTML",
         )
     await callback.answer()
+
+
+@router.callback_query(F.data == "admin:fakes:avatars")
+async def admin_fake_avatars_menu(callback: types.CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    if callback.message is None:
+        await callback.answer()
+        return
+    counts = {
+        "male": await count_fake_avatars("male"),
+        "female": await count_fake_avatars("female"),
+        "neutral": await count_fake_avatars("neutral"),
+    }
+    text = (
+        "<b>🖼 Аватарки фейков</b>\n\n"
+        f"Мужские: {counts['male']}\n"
+        f"Женские: {counts['female']}\n"
+        f"Нейтральные: {counts['neutral']}\n\n"
+        "Выбери категорию и отправляй фото."
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=admin_fake_avatars_gender_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin:fakeavatar:gender:"))
+async def admin_fake_avatar_select_gender(
+    callback: types.CallbackQuery, state: FSMContext
+) -> None:
+    gender = callback.data.split(":", 3)[3]
+    await state.set_state(AdminMenu.fake_avatar_upload)
+    await state.update_data(fake_avatar_gender=gender, fake_avatar_count=0)
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "Отправляй фото. Добавлено: 0. Когда закончишь, нажми Готово.",
+            reply_markup=admin_fake_avatar_upload_keyboard(),
+        )
+    await callback.answer()
+
+
+@router.message(AdminMenu.fake_avatar_upload)
+async def admin_fake_avatar_upload(message: types.Message, state: FSMContext) -> None:
+    if not message.photo:
+        await message.answer("Отправь фото.")
+        return
+
+    data = await state.get_data()
+    gender = data.get("fake_avatar_gender", "neutral")
+    count = data.get("fake_avatar_count", 0) + 1
+
+    file_id = message.photo[-1].file_id
+    await add_fake_avatar(gender, file_id)
+    await state.update_data(fake_avatar_count=count)
+
+    await message.answer(
+        f"Добавлено: {count}",
+        reply_markup=admin_fake_avatar_upload_keyboard(),
+    )
+
+
+@router.callback_query(F.data == "admin:fakeavatar:done")
+async def admin_fake_avatar_done(callback: types.CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    count = data.get("fake_avatar_count", 0)
+    await state.clear()
+    await callback.answer(f"Сохранено фото: {count}")
+    await admin_fakes_menu(callback, state)
 
 
 @router.callback_query(F.data == "admin:fakes:reset")

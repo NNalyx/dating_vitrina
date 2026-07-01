@@ -259,8 +259,31 @@ def admin_fakes_keyboard(fake_count: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="➕ Добавить фейк", callback_data="admin:fakes:add")],
+            [InlineKeyboardButton(text="🖼 Аватарки фейков", callback_data="admin:fakes:avatars")],
             [InlineKeyboardButton(text=f"🗑 Сбросить все фейки ({fake_count})", callback_data="admin:fakes:reset")],
             [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:menu")],
+        ]
+    )
+
+
+def admin_fake_avatars_gender_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Мужские", callback_data="admin:fakeavatar:gender:male")],
+            [InlineKeyboardButton(text="Женские", callback_data="admin:fakeavatar:gender:female")],
+            [InlineKeyboardButton(text="Нейтральные", callback_data="admin:fakeavatar:gender:neutral")],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="admin:fakes")],
+        ]
+    )
+
+
+def admin_fake_avatar_upload_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Готово", callback_data="admin:fakeavatar:done"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="admin:fakes"),
+            ]
         ]
     )
 

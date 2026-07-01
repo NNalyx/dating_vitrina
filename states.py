@@ -44,3 +44,5 @@ class AdminMenu(StatesGroup):
     fake_interests = State()
     fake_photo = State()
     fake_confirm = State()
+    fake_avatar_gender = State()
+    fake_avatar_upload = State()
